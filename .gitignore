@@ -4,6 +4,8 @@
 *.dll
 *.so
 *.dylib
+/bin/
+*-wasm
 
 # Test binary, built with `go test -c`
 *.test
@@ -11,12 +13,14 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Dependency directories
+node_modules/
+/vendor/
 
 # Build artifacts
 /build/
 /otel-ai-processor
+/benchmark-results/
 
 # IDE directories
 .idea/
@@ -26,10 +30,17 @@
 
 # OS specific files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # WASM model files (except placeholders for testing)
 /models/*.wasm
 
-# Log files
+# Log files and temporary files
 *.log
+*.tmp
+*.bak
