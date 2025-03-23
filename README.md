@@ -79,7 +79,7 @@ Comprehensive documentation is available in the `/docs` directory:
    docker build -t fortxun/caza-otel-ai-processor:latest .
    ```
 
-3. For detailed build instructions and troubleshooting, see [BUILD_GUIDE.md](./BUILD_GUIDE.md)
+3. For detailed build instructions and troubleshooting, see [Build Guide](./docs/BUILD_GUIDE.md)
 
 ### Running Tests
 
@@ -101,6 +101,21 @@ make test-integration
 # Run benchmarks
 make test-bench
 ```
+
+### CI/CD Pipeline
+
+This project uses GitHub Actions for continuous integration and testing:
+
+- **Stub Implementation Testing**: Builds and tests the processor with the stub WASM implementation
+- **Full WASM Implementation Testing**: Builds the WASM models and tests the processor with the full WASM implementation
+- **Performance Benchmarking**: Runs performance comparisons between the stub and WASM implementations
+- **Docker Builds**: Creates Docker images for both implementations
+
+The CI pipeline runs automatically on pull requests and pushes to the main branch, ensuring both implementations remain functional.
+
+To run the workflow manually, go to the Actions tab in the GitHub repository and select "CI Pipeline" from the workflows list.
+
+[![CI Pipeline Status](https://github.com/fortxun/caza-otel-ai-processor/actions/workflows/ci.yml/badge.svg)](https://github.com/fortxun/caza-otel-ai-processor/actions/workflows/ci.yml)
 
 ### Building WASM Models
 

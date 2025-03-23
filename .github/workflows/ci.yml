@@ -1,0 +1,152 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # For manual triggering
+
+jobs:
+  build-and-test-stub:
+    name: Build and Test (Stub Implementation)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          check-latest: true
+
+      - name: Build stub implementation
+        run: |
+          chmod +x ./build-stub.sh
+          ./build-stub.sh
+
+      - name: Run unit tests
+        run: go test -v ./pkg/...
+
+      - name: Run integration tests
+        run: go test -v ./pkg/processor/tests/integration_test.go ./pkg/processor/tests/mocks.go
+
+      - name: Upload stub binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: otel-ai-processor-stub
+          path: bin/otel-ai-processor
+          retention-days: 7
+
+  build-and-test-wasm:
+    name: Build and Test (WASM Implementation)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          check-latest: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build WASM models
+        run: |
+          chmod +x ./wasm-models/build-models.sh
+          cd wasm-models
+          npm install
+          ./build-models.sh
+
+      - name: Build full WASM implementation
+        run: |
+          chmod +x ./build-full-wasm.sh
+          ./build-full-wasm.sh
+
+      - name: Run WASM integration tests
+        run: |
+          chmod +x ./test-fullwasm-integration.sh
+          FULLWASM_TEST=1 go test -tags=fullwasm -v ./pkg/processor/tests/wasm_integration_test.go ./pkg/processor/tests/mocks.go
+
+      - name: Upload WASM binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: otel-ai-processor-wasm
+          path: bin/otel-ai-processor-wasm
+          retention-days: 7
+
+  performance-benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: [build-and-test-stub, build-and-test-wasm]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          check-latest: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build WASM models
+        run: |
+          chmod +x ./wasm-models/build-models.sh
+          cd wasm-models
+          npm install
+          ./build-models.sh
+
+      - name: Run WASM benchmarks
+        run: |
+          chmod +x ./test-wasm-benchmarks.sh
+          mkdir -p benchmark-results
+          FULLWASM_TEST=1 go test -tags=fullwasm -run=^$ -bench=BenchmarkWasm -benchmem ./pkg/processor/tests/wasm_benchmark_test.go > benchmark-results/benchmark_results.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results/
+          retention-days: 7
+
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [build-and-test-stub, build-and-test-wasm]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Stub Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.stub
+          push: false
+          tags: fortxun/caza-otel-ai-processor:stub
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Full WASM Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: fortxun/caza-otel-ai-processor:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
