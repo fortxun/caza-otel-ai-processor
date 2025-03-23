@@ -1,0 +1,41 @@
+{
+  "targets": {
+    "error-classifier": {
+      "outFile": "error-classifier/build/error-classifier.wasm",
+      "sourceMap": true,
+      "optimizeLevel": 3,
+      "shrinkLevel": 1,
+      "converge": false,
+      "noAssert": false
+    },
+    "importance-sampler": {
+      "outFile": "importance-sampler/build/importance-sampler.wasm",
+      "sourceMap": true,
+      "optimizeLevel": 3,
+      "shrinkLevel": 1,
+      "converge": false,
+      "noAssert": false
+    },
+    "entity-extractor": {
+      "outFile": "entity-extractor/build/entity-extractor.wasm",
+      "sourceMap": true,
+      "optimizeLevel": 3,
+      "shrinkLevel": 1,
+      "converge": false,
+      "noAssert": false
+    }
+  },
+  "options": {
+    "bindings": "esm",
+    "exportRuntime": true,
+    "exportStart": "_start",
+    "exportTable": true,
+    "exportMemory": "memory",
+    "importMemory": false,
+    "initialMemory": 2,
+    "maximumMemory": 16,
+    "noExportMemory": false,
+    "runtime": "incremental",
+    "use": []
+  }
+}

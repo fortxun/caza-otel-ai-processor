@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # OpenTelemetry Collector with AI Processor
+  otel-collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: otel-collector
+    command: "--config=/config/config.yaml"
+    volumes:
+      - ./config:/config
+      - ./models:/models
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "13133:13133" # Health check extension
+      - "1777:1777"   # pprof extension
+      - "55679:55679" # ZPages extension
+    networks:
+      - otel-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:13133"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  # Jaeger for visualization (optional)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # Web UI
+      - "14250:14250"  # gRPC
+    networks:
+      - otel-network
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+
+  # Prometheus for metrics visualization (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - otel-network
+
+  # Sample application for testing (optional)
+  sample-app:
+    image: ghcr.io/open-telemetry/opentelemetry-demo/frontend:latest
+    container_name: sample-app
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - OTEL_SERVICE_NAME=sample-service
+    networks:
+      - otel-network
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+
+networks:
+  otel-network:

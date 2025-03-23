@@ -1,0 +1,34 @@
+FROM golang:1.23
+
+WORKDIR /src
+COPY . .
+
+# Simple way to force a clean build
+RUN rm -f go.sum
+
+# Update all dependencies
+RUN go mod download
+RUN go mod tidy
+
+# Build the application
+RUN CGO_ENABLED=0 go build -v -o /otel-ai-processor ./cmd/processor
+
+# Use a minimal alpine image for the final container
+FROM alpine:3.17
+
+# Install certificates for HTTPS
+RUN apk --no-cache add ca-certificates
+
+# Create models directory and add a non-root user
+RUN mkdir -p /models && \
+    adduser -D -u 10001 otel
+
+# Copy binary and models
+COPY --from=0 /otel-ai-processor /bin/otel-ai-processor
+COPY models/* /models/
+
+# Use the non-root user
+USER 10001
+
+# Run the processor
+ENTRYPOINT ["/bin/otel-ai-processor"]

@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Entity Extractor Schema",
+  "description": "Schema for the entity extractor model input and output",
+  
+  "definitions": {
+    "attributeMap": {
+      "type": "object",
+      "description": "Map of key-value attributes",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "number" },
+          { "type": "boolean" }
+        ]
+      }
+    }
+  },
+  
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "object",
+      "description": "Input for the entity extractor",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the span/metric/log"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the telemetry (if available)"
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of telemetry (span, metric, log)"
+        },
+        "body": {
+          "type": "string",
+          "description": "Log body (for logs)"
+        },
+        "attributes": {
+          "$ref": "#/definitions/attributeMap",
+          "description": "Attributes associated with the telemetry"
+        },
+        "resource": {
+          "$ref": "#/definitions/attributeMap",
+          "description": "Resource attributes associated with the telemetry"
+        }
+      }
+    },
+    
+    "output": {
+      "type": "object",
+      "description": "Output from the entity extractor",
+      "required": ["services", "dependencies", "operations", "confidence"],
+      "properties": {
+        "services": {
+          "type": "array",
+          "description": "Identified services",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "description": "Identified dependencies",
+          "items": {
+            "type": "string"
+          }
+        },
+        "operations": {
+          "type": "array",
+          "description": "Identified operations",
+          "items": {
+            "type": "string"
+          }
+        },
+        "confidence": {
+          "type": "number",
+          "description": "Confidence score for the extraction (0.0-1.0)",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      }
+    }
+  }
+}

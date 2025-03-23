@@ -1,0 +1,42 @@
+FROM golang:1.23 AS builder
+
+WORKDIR /build
+
+# Install required dependencies
+RUN apt-get update && apt-get install -y build-essential
+
+# Copy only dependency files first to leverage Docker cache
+COPY go.mod go.sum* ./
+
+# Force rebuild of dependencies
+RUN go mod download
+
+# Copy the rest of the code
+COPY . .
+
+# Build the wasm models 
+RUN cd wasm-models && ./build-models.sh
+
+# Build the processor
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o /bin/otel-ai-processor ./cmd/processor
+
+# Final lightweight image
+FROM alpine:3.17
+
+# Install dependencies
+RUN apk --no-cache add ca-certificates
+
+# Create directory for models
+RUN mkdir -p /models
+
+# Copy the binary
+COPY --from=builder /bin/otel-ai-processor /bin/otel-ai-processor
+# Copy the models
+COPY --from=builder /build/models/* /models/
+
+# Set up a non-root user
+RUN adduser -D -u 10001 otel
+USER 10001
+
+# Run the processor
+ENTRYPOINT ["/bin/otel-ai-processor"]

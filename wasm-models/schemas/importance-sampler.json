@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Importance Sampler Schema",
+  "description": "Schema for the importance sampler model input and output",
+  
+  "definitions": {
+    "attributeMap": {
+      "type": "object",
+      "description": "Map of key-value attributes",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "number" },
+          { "type": "boolean" }
+        ]
+      }
+    }
+  },
+  
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "object",
+      "description": "Input for the importance sampler",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the span/metric/log"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status code or message"
+        },
+        "kind": {
+          "type": "string",
+          "description": "Kind of span (CLIENT, SERVER, etc.)"
+        },
+        "duration": {
+          "type": "number",
+          "description": "Duration in milliseconds (for spans)"
+        },
+        "attributes": {
+          "$ref": "#/definitions/attributeMap",
+          "description": "Attributes associated with the telemetry"
+        },
+        "resource": {
+          "$ref": "#/definitions/attributeMap",
+          "description": "Resource attributes associated with the telemetry"
+        }
+      }
+    },
+    
+    "output": {
+      "type": "object",
+      "description": "Output from the importance sampler",
+      "required": ["importance", "keep", "reason"],
+      "properties": {
+        "importance": {
+          "type": "number",
+          "description": "Importance score (0.0-1.0)",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "keep": {
+          "type": "boolean",
+          "description": "Whether to keep this telemetry item"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for the sampling decision",
+          "enum": [
+            "error_status",
+            "slow_duration",
+            "important_operation",
+            "high_importance_score",
+            "normal_sampling"
+          ]
+        }
+      }
+    }
+  }
+}

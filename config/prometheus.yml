@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "otel-collector"
+    static_configs:
+      - targets: ["otel-collector:8888"]  # Metrics endpoint of the OpenTelemetry Collector
+
+  - job_name: "sample-app"
+    static_configs:
+      - targets: ["sample-app:8888"]  # Metrics endpoint of the sample application

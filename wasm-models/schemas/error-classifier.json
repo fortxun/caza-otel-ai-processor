@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Error Classifier Schema",
+  "description": "Schema for the error classifier model input and output",
+  
+  "definitions": {
+    "attributeMap": {
+      "type": "object",
+      "description": "Map of key-value attributes",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "number" },
+          { "type": "boolean" }
+        ]
+      }
+    }
+  },
+  
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "object",
+      "description": "Input for the error classifier",
+      "required": ["status"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the span/operation that generated the error"
+        },
+        "status": {
+          "type": "string",
+          "description": "Error message or status"
+        },
+        "kind": {
+          "type": "string",
+          "description": "Kind of span (CLIENT, SERVER, etc.)"
+        },
+        "attributes": {
+          "$ref": "#/definitions/attributeMap",
+          "description": "Attributes associated with the error"
+        },
+        "resource": {
+          "$ref": "#/definitions/attributeMap",
+          "description": "Resource attributes associated with the error"
+        }
+      }
+    },
+    
+    "output": {
+      "type": "object",
+      "description": "Output from the error classifier",
+      "required": ["category", "system", "owner", "severity", "impact", "confidence"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "description": "Error category",
+          "enum": [
+            "database_error",
+            "network_error",
+            "authentication_error",
+            "configuration_error",
+            "rate_limiting_error",
+            "unclassified_error"
+          ]
+        },
+        "system": {
+          "type": "string",
+          "description": "Affected system or component"
+        },
+        "owner": {
+          "type": "string",
+          "description": "Suggested team or owner for the error"
+        },
+        "severity": {
+          "type": "string",
+          "description": "Error severity",
+          "enum": ["critical", "high", "medium", "low"]
+        },
+        "impact": {
+          "type": "string",
+          "description": "Business impact of the error",
+          "enum": ["high", "medium", "low"]
+        },
+        "confidence": {
+          "type": "number",
+          "description": "Confidence score for the classification (0.0-1.0)",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      }
+    }
+  }
+}
