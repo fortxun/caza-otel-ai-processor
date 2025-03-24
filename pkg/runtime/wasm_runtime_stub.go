@@ -9,90 +9,32 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"go.uber.org/zap"
 )
 
-// WasmRuntimeConfig defines the configuration for the Wasm runtime.
-type WasmRuntimeConfig struct {
-	ErrorClassifierPath   string
-	ErrorClassifierMemory int
-	SamplerPath           string
-	SamplerMemory         int
-	EntityExtractorPath   string
-	EntityExtractorMemory int
-	
-	// EnableModelCaching enables caching model results
-	EnableModelCaching bool
-	
-	// ModelCacheSize defines the size of the model results cache
-	ModelCacheSize int
-	
-	// ModelCacheTTLSeconds defines the TTL for cached model results
-	ModelCacheTTLSeconds int
-}
-
-// WasmRuntime manages the WASM modules and provides methods to invoke them.
-// This is a stubbed version to allow building without wasmer-go
-type WasmRuntime struct {
-	logger           *zap.Logger
-	mutex            sync.RWMutex
-	
-	// Caches for model results
-	errorClassifierCache *ModelResultsCache
-	samplerCache         *ModelResultsCache
-	entityExtractorCache *ModelResultsCache
-	
-	// Function overrides for testing
-	ClassifyErrorFunc    func(ctx context.Context, errorInfo map[string]interface{}) (map[string]interface{}, error)
-	SampleTelemetryFunc  func(ctx context.Context, telemetryItem map[string]interface{}) (map[string]interface{}, error)
-	ExtractEntitiesFunc  func(ctx context.Context, telemetryItem map[string]interface{}) (map[string]interface{}, error)
-	CloseFunc            func() error
+// stubImpl is the implementation of wasmRuntimeImpl for the stub version
+type stubImpl struct {
+	logger *zap.Logger
 }
 
 // NewWasmRuntime creates a new WASM runtime and loads the models.
 // This is a stubbed version that logs model paths but doesn't actually load WASM modules
 func NewWasmRuntime(logger *zap.Logger, config *WasmRuntimeConfig) (*WasmRuntime, error) {
-	runtime := &WasmRuntime{
-		logger: logger,
-		mutex:  sync.RWMutex{},
-	}
-	
-	// Initialize caches if enabled
-	if config.EnableModelCaching {
-		// Default TTL to 60 seconds if not specified
-		ttl := config.ModelCacheTTLSeconds
-		if ttl == 0 {
-			ttl = 60
-		}
-		
-		// Create caches for each model
-		var err error
-		
-		// Error classifier cache
-		runtime.errorClassifierCache, err = NewModelResultsCache(config.ModelCacheSize, ttl)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create error classifier cache: %w", err)
-		}
-		
-		// Sampler cache
-		runtime.samplerCache, err = NewModelResultsCache(config.ModelCacheSize, ttl)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create sampler cache: %w", err)
-		}
-		
-		// Entity extractor cache
-		runtime.entityExtractorCache, err = NewModelResultsCache(config.ModelCacheSize, ttl)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create entity extractor cache: %w", err)
-		}
-		
-		logger.Info("Enabled model result caching",
-			zap.Int("cache_size", config.ModelCacheSize),
-			zap.Int("ttl_seconds", ttl))
+	// Initialize the common runtime components
+	runtime, err := initializeRuntime(logger, config)
+	if err != nil {
+		return nil, err
 	}
 
+	// Create the stub implementation
+	stubImpl := &stubImpl{
+		logger: logger,
+	}
+
+	// Set the implementation
+	runtime.impl = stubImpl
+	
 	// Log model paths but don't actually load them in the stub version
 	if config.ErrorClassifierPath != "" {
 		logger.Info("Would load error classifier model in non-stub version", 
@@ -114,21 +56,9 @@ func NewWasmRuntime(logger *zap.Logger, config *WasmRuntimeConfig) (*WasmRuntime
 
 // ClassifyError classifies an error using the error classifier model.
 // In the stub version, it returns a default classification
-func (r *WasmRuntime) ClassifyError(ctx context.Context, errorInfo map[string]interface{}) (map[string]interface{}, error) {
-	// If we have a testing override, use it
-	if r.ClassifyErrorFunc != nil {
-		return r.ClassifyErrorFunc(ctx, errorInfo)
-	}
+func (s *stubImpl) ClassifyError(ctx context.Context, errorInfo map[string]interface{}) (map[string]interface{}, error) {
+	s.logger.Info("Stub ClassifyError called", zap.Any("errorInfo", errorInfo))
 	
-	r.logger.Info("Stub ClassifyError called", zap.Any("errorInfo", errorInfo))
-	
-	// Check cache first if enabled
-	if r.errorClassifierCache != nil {
-		if cachedResult, found := r.errorClassifierCache.Get(errorInfo); found {
-			return cachedResult, nil
-		}
-	}
-
 	// Return stub classification
 	classification := map[string]interface{}{
 		"error_type": "unknown",
@@ -138,31 +68,14 @@ func (r *WasmRuntime) ClassifyError(ctx context.Context, errorInfo map[string]in
 		"owner": "platform-team",
 	}
 	
-	// Cache the result if caching is enabled
-	if r.errorClassifierCache != nil {
-		r.errorClassifierCache.Put(errorInfo, classification)
-	}
-
 	return classification, nil
 }
 
 // SampleTelemetry determines whether to sample a telemetry item.
 // In the stub version, it returns a default sampling decision
-func (r *WasmRuntime) SampleTelemetry(ctx context.Context, telemetryItem map[string]interface{}) (map[string]interface{}, error) {
-	// If we have a testing override, use it
-	if r.SampleTelemetryFunc != nil {
-		return r.SampleTelemetryFunc(ctx, telemetryItem)
-	}
+func (s *stubImpl) SampleTelemetry(ctx context.Context, telemetryItem map[string]interface{}) (map[string]interface{}, error) {
+	s.logger.Info("Stub SampleTelemetry called", zap.Any("telemetryItem", telemetryItem))
 	
-	r.logger.Info("Stub SampleTelemetry called", zap.Any("telemetryItem", telemetryItem))
-	
-	// Check cache first if enabled
-	if r.samplerCache != nil {
-		if cachedResult, found := r.samplerCache.Get(telemetryItem); found {
-			return cachedResult, nil
-		}
-	}
-
 	// Extract some info from the telemetry item to make the stub more realistic
 	name, _ := telemetryItem["name"].(string)
 	hasError := false
@@ -186,31 +99,14 @@ func (r *WasmRuntime) SampleTelemetry(ctx context.Context, telemetryItem map[str
 		"confidence": 0.9,
 	}
 	
-	// Cache the result if caching is enabled
-	if r.samplerCache != nil {
-		r.samplerCache.Put(telemetryItem, result)
-	}
-
 	return result, nil
 }
 
 // ExtractEntities extracts entities from a telemetry item.
 // In the stub version, it returns default entities based on telemetry attributes
-func (r *WasmRuntime) ExtractEntities(ctx context.Context, telemetryItem map[string]interface{}) (map[string]interface{}, error) {
-	// If we have a testing override, use it
-	if r.ExtractEntitiesFunc != nil {
-		return r.ExtractEntitiesFunc(ctx, telemetryItem)
-	}
+func (s *stubImpl) ExtractEntities(ctx context.Context, telemetryItem map[string]interface{}) (map[string]interface{}, error) {
+	s.logger.Info("Stub ExtractEntities called", zap.Any("telemetryItem", telemetryItem))
 	
-	r.logger.Info("Stub ExtractEntities called", zap.Any("telemetryItem", telemetryItem))
-	
-	// Check cache first if enabled
-	if r.entityExtractorCache != nil {
-		if cachedResult, found := r.entityExtractorCache.Get(telemetryItem); found {
-			return cachedResult, nil
-		}
-	}
-
 	// Extract some info to make stub more realistic
 	name, _ := telemetryItem["name"].(string)
 	
@@ -232,18 +128,13 @@ func (r *WasmRuntime) ExtractEntities(ctx context.Context, telemetryItem map[str
 		}
 	}
 	
-	// Cache the result if caching is enabled
-	if r.entityExtractorCache != nil {
-		r.entityExtractorCache.Put(telemetryItem, entities)
-	}
-
 	return entities, nil
 }
 
 // ReloadModel reloads a specific model.
 // In the stub version, it just logs the reload
-func (r *WasmRuntime) ReloadModel(modelType string, path string) error {
-	r.logger.Info("Stub ReloadModel called", 
+func (s *stubImpl) ReloadModel(modelType string, path string) error {
+	s.logger.Info("Stub ReloadModel called", 
 		zap.String("type", modelType), 
 		zap.String("path", path))
 	return nil
@@ -251,12 +142,7 @@ func (r *WasmRuntime) ReloadModel(modelType string, path string) error {
 
 // Close cleans up resources used by the WASM runtime.
 // In the stub version, it just logs the close
-func (r *WasmRuntime) Close() error {
-	// If we have a testing override, use it
-	if r.CloseFunc != nil {
-		return r.CloseFunc()
-	}
-	
-	r.logger.Info("Stub Close called")
+func (s *stubImpl) Close() error {
+	s.logger.Info("Stub Close called")
 	return nil
 }
