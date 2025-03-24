@@ -74,15 +74,17 @@ type MockConsumer struct {
 
 // MockTracesConsumer is a mock implementation of the traces consumer
 type MockTracesConsumer struct {
-	TracesCalled bool
-	TracesInput  ptrace.Traces
-	TracesError  error
+	TracesCalled   bool
+	TracesInput    ptrace.Traces
+	TracesError    error
+	ConsumedTraces []ptrace.Traces
 }
 
 // ConsumeTraces is a mock implementation
 func (m *MockTracesConsumer) ConsumeTraces(ctx context.Context, traces ptrace.Traces) error {
 	m.TracesCalled = true
 	m.TracesInput = traces
+	m.ConsumedTraces = append(m.ConsumedTraces, traces)
 	return m.TracesError
 }
 
@@ -93,15 +95,17 @@ func (m *MockTracesConsumer) Capabilities() consumer.Capabilities {
 
 // MockMetricsConsumer is a mock implementation of the metrics consumer
 type MockMetricsConsumer struct {
-	MetricsCalled bool
-	MetricsInput  pmetric.Metrics
-	MetricsError  error
+	MetricsCalled    bool
+	MetricsInput     pmetric.Metrics
+	MetricsError     error
+	ConsumedMetrics  []pmetric.Metrics
 }
 
 // ConsumeMetrics is a mock implementation
 func (m *MockMetricsConsumer) ConsumeMetrics(ctx context.Context, metrics pmetric.Metrics) error {
 	m.MetricsCalled = true
 	m.MetricsInput = metrics
+	m.ConsumedMetrics = append(m.ConsumedMetrics, metrics)
 	return m.MetricsError
 }
 
@@ -112,15 +116,17 @@ func (m *MockMetricsConsumer) Capabilities() consumer.Capabilities {
 
 // MockLogsConsumer is a mock implementation of the logs consumer
 type MockLogsConsumer struct {
-	LogsCalled bool
-	LogsInput  plog.Logs
-	LogsError  error
+	LogsCalled   bool
+	LogsInput    plog.Logs
+	LogsError    error
+	ConsumedLogs []plog.Logs
 }
 
 // ConsumeLogs is a mock implementation
 func (m *MockLogsConsumer) ConsumeLogs(ctx context.Context, logs plog.Logs) error {
 	m.LogsCalled = true
 	m.LogsInput = logs
+	m.ConsumedLogs = append(m.ConsumedLogs, logs)
 	return m.LogsError
 }
 
