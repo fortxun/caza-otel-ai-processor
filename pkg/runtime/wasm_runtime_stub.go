@@ -1,6 +1,9 @@
 //go:build !fullwasm
 // +build !fullwasm
 
+// This file contains a stub implementation of the WASM runtime
+// Used when building without the fullwasm tag
+
 package runtime
 
 import (
@@ -40,6 +43,12 @@ type WasmRuntime struct {
 	errorClassifierCache *ModelResultsCache
 	samplerCache         *ModelResultsCache
 	entityExtractorCache *ModelResultsCache
+	
+	// Function overrides for testing
+	ClassifyErrorFunc    func(ctx context.Context, errorInfo map[string]interface{}) (map[string]interface{}, error)
+	SampleTelemetryFunc  func(ctx context.Context, telemetryItem map[string]interface{}) (map[string]interface{}, error)
+	ExtractEntitiesFunc  func(ctx context.Context, telemetryItem map[string]interface{}) (map[string]interface{}, error)
+	CloseFunc            func() error
 }
 
 // NewWasmRuntime creates a new WASM runtime and loads the models.
@@ -106,6 +115,11 @@ func NewWasmRuntime(logger *zap.Logger, config *WasmRuntimeConfig) (*WasmRuntime
 // ClassifyError classifies an error using the error classifier model.
 // In the stub version, it returns a default classification
 func (r *WasmRuntime) ClassifyError(ctx context.Context, errorInfo map[string]interface{}) (map[string]interface{}, error) {
+	// If we have a testing override, use it
+	if r.ClassifyErrorFunc != nil {
+		return r.ClassifyErrorFunc(ctx, errorInfo)
+	}
+	
 	r.logger.Info("Stub ClassifyError called", zap.Any("errorInfo", errorInfo))
 	
 	// Check cache first if enabled
@@ -135,6 +149,11 @@ func (r *WasmRuntime) ClassifyError(ctx context.Context, errorInfo map[string]in
 // SampleTelemetry determines whether to sample a telemetry item.
 // In the stub version, it returns a default sampling decision
 func (r *WasmRuntime) SampleTelemetry(ctx context.Context, telemetryItem map[string]interface{}) (map[string]interface{}, error) {
+	// If we have a testing override, use it
+	if r.SampleTelemetryFunc != nil {
+		return r.SampleTelemetryFunc(ctx, telemetryItem)
+	}
+	
 	r.logger.Info("Stub SampleTelemetry called", zap.Any("telemetryItem", telemetryItem))
 	
 	// Check cache first if enabled
@@ -156,7 +175,7 @@ func (r *WasmRuntime) SampleTelemetry(ctx context.Context, telemetryItem map[str
 	if hasError {
 		importance = 0.9 // high importance for errors
 	}
-	if name != "" && (len(name) > 3 && name[:3] == "db." || name[:3] == "sql") {
+	if name != "" && (len(name) > 3 && (name[:3] == "db." || name[:3] == "sql")) {
 		importance = 0.8 // higher importance for database operations
 	}
 
@@ -178,6 +197,11 @@ func (r *WasmRuntime) SampleTelemetry(ctx context.Context, telemetryItem map[str
 // ExtractEntities extracts entities from a telemetry item.
 // In the stub version, it returns default entities based on telemetry attributes
 func (r *WasmRuntime) ExtractEntities(ctx context.Context, telemetryItem map[string]interface{}) (map[string]interface{}, error) {
+	// If we have a testing override, use it
+	if r.ExtractEntitiesFunc != nil {
+		return r.ExtractEntitiesFunc(ctx, telemetryItem)
+	}
+	
 	r.logger.Info("Stub ExtractEntities called", zap.Any("telemetryItem", telemetryItem))
 	
 	// Check cache first if enabled
@@ -228,6 +252,11 @@ func (r *WasmRuntime) ReloadModel(modelType string, path string) error {
 // Close cleans up resources used by the WASM runtime.
 // In the stub version, it just logs the close
 func (r *WasmRuntime) Close() error {
+	// If we have a testing override, use it
+	if r.CloseFunc != nil {
+		return r.CloseFunc()
+	}
+	
 	r.logger.Info("Stub Close called")
 	return nil
 }
