@@ -469,42 +469,4 @@ func createTestLogs(serviceName string, severity plog.SeverityNumber, message st
 	return logs
 }
 
-// Mock consumers for testing
-type MockTracesConsumer struct {
-	ConsumedTraces []ptrace.Traces
-}
-
-func (m *MockTracesConsumer) ConsumeTraces(_ context.Context, td ptrace.Traces) error {
-	m.ConsumedTraces = append(m.ConsumedTraces, td)
-	return nil
-}
-
-func (m *MockTracesConsumer) Capabilities() consumer.Capabilities {
-	return consumer.Capabilities{MutatesData: false}
-}
-
-type MockMetricsConsumer struct {
-	ConsumedMetrics []pmetric.Metrics
-}
-
-func (m *MockMetricsConsumer) ConsumeMetrics(_ context.Context, md pmetric.Metrics) error {
-	m.ConsumedMetrics = append(m.ConsumedMetrics, md)
-	return nil
-}
-
-func (m *MockMetricsConsumer) Capabilities() consumer.Capabilities {
-	return consumer.Capabilities{MutatesData: false}
-}
-
-type MockLogsConsumer struct {
-	ConsumedLogs []plog.Logs
-}
-
-func (m *MockLogsConsumer) ConsumeLogs(_ context.Context, ld plog.Logs) error {
-	m.ConsumedLogs = append(m.ConsumedLogs, ld)
-	return nil
-}
-
-func (m *MockLogsConsumer) Capabilities() consumer.Capabilities {
-	return consumer.Capabilities{MutatesData: false}
-}
+// Note: Mock consumers are defined in mocks.go

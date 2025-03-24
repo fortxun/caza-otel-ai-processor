@@ -6,7 +6,10 @@ import (
 
 	"github.com/fortxun/caza-otel-ai-processor/pkg/processor"
 	"github.com/fortxun/caza-otel-ai-processor/pkg/runtime"
-	"go.opentelemetry.io/collector/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
 )
 
@@ -41,7 +44,7 @@ func BenchmarkTracesProcessor_PassThrough(b *testing.B) {
 
 	// Create test data
 	testData := &TestData{}
-	traces := testData.CreateTestTraces(nil, nil, pdata.StatusCodeOk)
+	traces := testData.CreateTestTraces(nil, nil, ptrace.StatusCodeOk)
 
 	// Run the benchmark
 	ctx := context.Background()
@@ -93,7 +96,7 @@ func BenchmarkTracesProcessor_WithFeatures(b *testing.B) {
 			"db.system": "postgresql",
 			"db.statement": "SELECT * FROM users WHERE id = ?",
 		},
-		pdata.StatusCodeError,
+		ptrace.StatusCodeError,
 	)
 
 	// Run the benchmark
@@ -135,7 +138,7 @@ func BenchmarkLogsProcessor_PassThrough(b *testing.B) {
 
 	// Create test data
 	testData := &TestData{}
-	logs := testData.CreateTestLogs(nil, pdata.SeverityNumberInfo, "")
+	logs := testData.CreateTestLogs(nil, plog.SeverityNumberInfo, "")
 
 	// Run the benchmark
 	ctx := context.Background()
@@ -183,7 +186,7 @@ func BenchmarkLogsProcessor_WithFeatures(b *testing.B) {
 	testData := &TestData{}
 	logs := testData.CreateTestLogs(
 		map[string]interface{}{"service.name": "user-service"},
-		pdata.SeverityNumberError,
+		plog.SeverityNumberError,
 		"Failed to connect to database: connection refused",
 	)
 
@@ -224,7 +227,7 @@ func BenchmarkSamplingDecision(b *testing.B) {
 			"http.method": "POST",
 			"http.url": "/api/payments",
 		},
-		pdata.StatusCodeOk,
+		ptrace.StatusCodeOk,
 	)
 
 	// Extract a resource and span for sampling
@@ -275,7 +278,7 @@ func BenchmarkErrorClassification(b *testing.B) {
 			"db.system": "postgresql",
 			"db.statement": "SELECT * FROM users WHERE id = ?",
 		},
-		pdata.StatusCodeError,
+		ptrace.StatusCodeError,
 	)
 
 	// Extract a resource and span for classification
@@ -308,15 +311,15 @@ type TracesProcessor struct {
 	WasmRuntime  *MockWasmRuntime
 }
 
-func (p *TracesProcessor) ProcessTraces(ctx context.Context, td pdata.Traces) (pdata.Traces, error) {
+func (p *TracesProcessor) ProcessTraces(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
 	return td, nil
 }
 
-func (p *TracesProcessor) MakeSamplingDecision(ctx context.Context, span pdata.Span, resource pdata.Resource) bool {
+func (p *TracesProcessor) MakeSamplingDecision(ctx context.Context, span ptrace.Span, resource pcommon.Resource) bool {
 	return true
 }
 
-func (p *TracesProcessor) ClassifyError(ctx context.Context, span pdata.Span, resource pdata.Resource) {
+func (p *TracesProcessor) ClassifyError(ctx context.Context, span ptrace.Span, resource pcommon.Resource) {
 	// No-op
 }
 
@@ -327,6 +330,6 @@ type LogsProcessor struct {
 	WasmRuntime  *MockWasmRuntime
 }
 
-func (p *LogsProcessor) ProcessLogs(ctx context.Context, ld pdata.Logs) (pdata.Logs, error) {
+func (p *LogsProcessor) ProcessLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
 	return ld, nil
 }
