@@ -28,11 +28,11 @@ func newLogsProcessor(
 	// Initialize WASM runtime
 	wasmRuntime, err := runtime.NewWasmRuntime(logger, &runtime.WasmRuntimeConfig{
 		ErrorClassifierPath:   config.Models.ErrorClassifier.Path,
-		ErrorClassifierMemory: config.Models.ErrorClassifier.MemoryLimit,
+		ErrorClassifierMemory: config.Models.ErrorClassifier.MemoryLimitMB,
 		SamplerPath:           config.Models.ImportanceSampler.Path,
-		SamplerMemory:         config.Models.ImportanceSampler.MemoryLimit,
+		SamplerMemory:         config.Models.ImportanceSampler.MemoryLimitMB,
 		EntityExtractorPath:   config.Models.EntityExtractor.Path,
-		EntityExtractorMemory: config.Models.EntityExtractor.MemoryLimit,
+		EntityExtractorMemory: config.Models.EntityExtractor.MemoryLimitMB,
 	})
 	if err != nil {
 		return nil, err

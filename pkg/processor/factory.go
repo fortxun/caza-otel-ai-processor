@@ -98,17 +98,17 @@ func createDefaultConfig() component.Config {
 		Models: ModelsConfig{
 			ErrorClassifier: ModelConfig{
 				Path:         "/models/error-classifier.wasm",
-				MemoryLimit:  100,
+				MemoryLimitMB:  100,
 				TimeoutMs:    50,
 			},
 			ImportanceSampler: ModelConfig{
 				Path:         "/models/importance-sampler.wasm",
-				MemoryLimit:  80,
+				MemoryLimitMB:  80,
 				TimeoutMs:    30,
 			},
 			EntityExtractor: ModelConfig{
 				Path:         "/models/entity-extractor.wasm",
-				MemoryLimit:  150,
+				MemoryLimitMB:  150,
 				TimeoutMs:    50,
 			},
 		},
