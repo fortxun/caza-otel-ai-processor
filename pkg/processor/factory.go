@@ -1,7 +1,5 @@
-//go:build !fullwasm
-// +build !fullwasm
-
-// This file contains the stub implementation of the processor factory
+// This file contains the common implementation of the processor factory
+// that works with both stub and fullwasm builds
 
 package processor
 

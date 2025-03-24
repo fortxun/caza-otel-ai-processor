@@ -8,14 +8,15 @@ import (
 	"time"
 
 	"github.com/fortxun/caza-otel-ai-processor/pkg/processor"
-	"github.com/fortxun/caza-otel-ai-processor/pkg/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 )
 
@@ -92,10 +93,10 @@ func TestWasmIntegration(t *testing.T) {
 	defaultConfig.Output.MaxAttributeLength = 256
 
 	// Create processor settings
-	settings := component.ProcessorCreateSettings{
-		Logger:               logger,
-		BuildInfo:            component.BuildInfo{},
-		TelemetrySettings:    component.TelemetrySettings{},
+	settings := processor.Settings{
+		TelemetrySettings: component.TelemetrySettings{},
+		BuildInfo:         component.BuildInfo{},
+		Logger:            logger,
 	}
 
 	// =========================================================================
@@ -478,8 +479,8 @@ func (m *MockTracesConsumer) ConsumeTraces(_ context.Context, td ptrace.Traces) 
 	return nil
 }
 
-func (m *MockTracesConsumer) Capabilities() component.Capabilities {
-	return component.Capabilities{MutatesData: false}
+func (m *MockTracesConsumer) Capabilities() consumer.Capabilities {
+	return consumer.Capabilities{MutatesData: false}
 }
 
 type MockMetricsConsumer struct {
@@ -491,8 +492,8 @@ func (m *MockMetricsConsumer) ConsumeMetrics(_ context.Context, md pmetric.Metri
 	return nil
 }
 
-func (m *MockMetricsConsumer) Capabilities() component.Capabilities {
-	return component.Capabilities{MutatesData: false}
+func (m *MockMetricsConsumer) Capabilities() consumer.Capabilities {
+	return consumer.Capabilities{MutatesData: false}
 }
 
 type MockLogsConsumer struct {
@@ -504,6 +505,6 @@ func (m *MockLogsConsumer) ConsumeLogs(_ context.Context, ld plog.Logs) error {
 	return nil
 }
 
-func (m *MockLogsConsumer) Capabilities() component.Capabilities {
-	return component.Capabilities{MutatesData: false}
+func (m *MockLogsConsumer) Capabilities() consumer.Capabilities {
+	return consumer.Capabilities{MutatesData: false}
 }

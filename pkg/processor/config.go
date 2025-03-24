@@ -35,7 +35,7 @@ type ModelConfig struct {
 	Path string `mapstructure:"path"`
 	
 	// Memory limit in MB for the WASM module
-	MemoryLimit int `mapstructure:"memory_limit_mb"`
+	MemoryLimitMB int `mapstructure:"memory_limit_mb"`
 	
 	// Timeout in milliseconds for model inference
 	TimeoutMs int `mapstructure:"timeout_ms"`
