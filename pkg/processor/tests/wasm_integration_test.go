@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fortxun/caza-otel-ai-processor/pkg/processor"
+	ourprocessor "github.com/fortxun/caza-otel-ai-processor/pkg/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	"go.opentelemetry.io/collector/processor"
+	otprocessor "go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 )
 
@@ -52,10 +52,10 @@ func TestWasmIntegration(t *testing.T) {
 		zap.String("entity_extractor", entityExtractorPath))
 
 	// Create a factory
-	factory := processor.NewFactory()
+	factory := ourprocessor.NewFactory()
 
 	// Get the default config
-	defaultConfig := factory.CreateDefaultConfig().(*processor.Config)
+	defaultConfig := factory.CreateDefaultConfig().(*ourprocessor.Config)
 	
 	// Configure WASM models
 	defaultConfig.Models.ErrorClassifier.Path = errorClassifierPath
@@ -93,9 +93,10 @@ func TestWasmIntegration(t *testing.T) {
 	defaultConfig.Output.MaxAttributeLength = 256
 
 	// Create processor settings
-	settings := processor.Settings{
+	settings := otprocessor.CreateSettings{
 		TelemetrySettings: component.TelemetrySettings{},
 		BuildInfo:         component.BuildInfo{},
+		ID:                component.NewID("ai_processor"),
 		Logger:            logger,
 	}
 
@@ -107,7 +108,7 @@ func TestWasmIntegration(t *testing.T) {
 	tracesConsumer := &MockTracesConsumer{}
 
 	// Create the traces processor
-	tracesProcessor, err := factory.CreateTracesProcessor(
+	tracesProcessor, err := factory.CreateTraces(
 		context.Background(),
 		settings,
 		defaultConfig,
@@ -180,7 +181,7 @@ func TestWasmIntegration(t *testing.T) {
 	metricsConsumer := &MockMetricsConsumer{}
 
 	// Create the metrics processor
-	metricsProcessor, err := factory.CreateMetricsProcessor(
+	metricsProcessor, err := factory.CreateMetrics(
 		context.Background(),
 		settings,
 		defaultConfig,
@@ -211,7 +212,7 @@ func TestWasmIntegration(t *testing.T) {
 	logsConsumer := &MockLogsConsumer{}
 
 	// Create the logs processor
-	logsProcessor, err := factory.CreateLogsProcessor(
+	logsProcessor, err := factory.CreateLogs(
 		context.Background(),
 		settings,
 		defaultConfig,
@@ -246,7 +247,7 @@ func TestWasmIntegration(t *testing.T) {
 	parallelTracesConsumer := &MockTracesConsumer{}
 	
 	// Create another processor
-	parallelProcessor, err := factory.CreateTracesProcessor(
+	parallelProcessor, err := factory.CreateTraces(
 		context.Background(),
 		settings,
 		defaultConfig,
