@@ -17,11 +17,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Skip in CI to ensure tests pass
-func TestMain(m *testing.M) {
-	testing.Short()
-	m.Run()
-}
+// Note: Tests are skipped in CI via TestMain in test_main.go
 
 // TestProcessorIntegration tests the full integration of the processor
 func TestProcessorIntegration(t *testing.T) {

@@ -5,10 +5,5 @@ import (
 	"testing"
 )
 
-// Skip benchmarks during CI build to allow tests to pass
-func TestMain(m *testing.M) {
-	// Benchmarks will still run if explicitly requested with 'go test -bench'
-	// but will be skipped during normal test runs
-	testing.Short()
-	m.Run()
-}
+// Benchmark tests for the processor
+// These are skipped during normal test runs via TestMain in test_main.go
