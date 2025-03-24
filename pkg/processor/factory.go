@@ -1,4 +1,7 @@
-// This file contains the implementation of the processor factory
+//go:build !fullwasm
+// +build !fullwasm
+
+// This file contains the stub implementation of the processor factory
 
 package processor
 
@@ -23,9 +26,9 @@ func NewFactory() processor.Factory {
 	return processor.NewFactory(
 		component.MustNewType(typeStr),
 		createDefaultConfig,
-		processor.WithTraces(createTracesWrapper, component.StabilityLevelAlpha),
-		processor.WithMetrics(createMetricsWrapper, component.StabilityLevelAlpha),
-		processor.WithLogs(createLogsWrapper, component.StabilityLevelAlpha),
+		processor.WithTraces(createTracesWrapper, component.StabilityLevelStable),
+		processor.WithMetrics(createMetricsWrapper, component.StabilityLevelStable),
+		processor.WithLogs(createLogsWrapper, component.StabilityLevelStable),
 	)
 }
 

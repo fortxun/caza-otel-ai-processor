@@ -2,7 +2,7 @@ module github.com/fortxun/caza-otel-ai-processor
 
 go 1.23.0
 
-toolchain go1.24.1
+toolchain go1.23.7
 
 require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
@@ -23,7 +23,6 @@ require (
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
-	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/ebitengine/purego v0.8.2 // indirect

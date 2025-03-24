@@ -19,8 +19,8 @@ if ! command -v go &> /dev/null; then
 fi
 
 GO_VERSION=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | cut -c 3-)
-if [ "$(echo "$GO_VERSION < 1.23" | bc -l 2>/dev/null)" == "1" ]; then
-  echo "❌ Error: Go version $GO_VERSION detected, but 1.23 or higher is required."
+if [ "$(echo "$GO_VERSION < 1.22" | bc -l 2>/dev/null)" == "1" ]; then
+  echo "❌ Error: Go version $GO_VERSION detected, but 1.22 or higher is required."
   exit 1
 fi
 
