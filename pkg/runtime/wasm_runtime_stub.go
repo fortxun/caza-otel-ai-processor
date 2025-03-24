@@ -8,7 +8,6 @@ package runtime
 
 import (
 	"context"
-	"fmt"
 
 	"go.uber.org/zap"
 )
