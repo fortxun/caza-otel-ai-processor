@@ -14,7 +14,7 @@ rm -f go.sum
 
 # Setup PATH to use local Go installation
 export PATH="$PWD/local-go/go/bin:$PATH"
-export GOMODCACHE="$PWD/go-modules/pkg/mod"
+# Use standard GOPATH for module cache, don't set GOMODCACHE to a relative path
 export GO111MODULE=on
 
 # Validate Go version
