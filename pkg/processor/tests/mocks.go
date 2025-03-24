@@ -72,6 +72,63 @@ type MockConsumer struct {
 	LogsError  error
 }
 
+// MockTracesConsumer is a mock implementation of the traces consumer
+type MockTracesConsumer struct {
+	TracesCalled bool
+	TracesInput  ptrace.Traces
+	TracesError  error
+}
+
+// ConsumeTraces is a mock implementation
+func (m *MockTracesConsumer) ConsumeTraces(ctx context.Context, traces ptrace.Traces) error {
+	m.TracesCalled = true
+	m.TracesInput = traces
+	return m.TracesError
+}
+
+// Capabilities returns the consumer capabilities
+func (m *MockTracesConsumer) Capabilities() consumer.Capabilities {
+	return consumer.Capabilities{MutatesData: false}
+}
+
+// MockMetricsConsumer is a mock implementation of the metrics consumer
+type MockMetricsConsumer struct {
+	MetricsCalled bool
+	MetricsInput  pmetric.Metrics
+	MetricsError  error
+}
+
+// ConsumeMetrics is a mock implementation
+func (m *MockMetricsConsumer) ConsumeMetrics(ctx context.Context, metrics pmetric.Metrics) error {
+	m.MetricsCalled = true
+	m.MetricsInput = metrics
+	return m.MetricsError
+}
+
+// Capabilities returns the consumer capabilities
+func (m *MockMetricsConsumer) Capabilities() consumer.Capabilities {
+	return consumer.Capabilities{MutatesData: false}
+}
+
+// MockLogsConsumer is a mock implementation of the logs consumer
+type MockLogsConsumer struct {
+	LogsCalled bool
+	LogsInput  plog.Logs
+	LogsError  error
+}
+
+// ConsumeLogs is a mock implementation
+func (m *MockLogsConsumer) ConsumeLogs(ctx context.Context, logs plog.Logs) error {
+	m.LogsCalled = true
+	m.LogsInput = logs
+	return m.LogsError
+}
+
+// Capabilities returns the consumer capabilities
+func (m *MockLogsConsumer) Capabilities() consumer.Capabilities {
+	return consumer.Capabilities{MutatesData: false}
+}
+
 // ConsumeTraces is a mock implementation
 func (m *MockConsumer) ConsumeTraces(ctx context.Context, traces ptrace.Traces) error {
 	m.TracesCalled = true

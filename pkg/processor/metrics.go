@@ -83,7 +83,7 @@ func (p *fullMetricsProcessor) processMetrics(ctx context.Context, md pmetric.Me
 }
 
 // Process metrics in parallel for better performance
-func (p *metricsProcessor) processMetricsParallel(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
+func (p *fullMetricsProcessor) processMetricsParallel(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
 	// Create a worker pool
 	numWorkers := p.config.Processing.MaxParallelWorkers
 	if numWorkers <= 0 {
@@ -112,7 +112,7 @@ func (p *metricsProcessor) processMetricsParallel(ctx context.Context, md pmetri
 	return md, nil
 }
 
-func (p *metricsProcessor) processMetric(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource) {
+func (p *fullMetricsProcessor) processMetric(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource) {
 	// Extract information for classification and enrichment
 	metricInfo := map[string]interface{}{
 		"name":        metric.Name(),
@@ -136,7 +136,7 @@ func (p *metricsProcessor) processMetric(ctx context.Context, metric pmetric.Met
 	}
 }
 
-func (p *metricsProcessor) processGauge(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource, metricInfo map[string]interface{}) {
+func (p *fullMetricsProcessor) processGauge(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource, metricInfo map[string]interface{}) {
 	gauge := metric.Gauge()
 	dataPoints := gauge.DataPoints()
 	
@@ -146,7 +146,7 @@ func (p *metricsProcessor) processGauge(ctx context.Context, metric pmetric.Metr
 	}
 }
 
-func (p *metricsProcessor) processSum(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource, metricInfo map[string]interface{}) {
+func (p *fullMetricsProcessor) processSum(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource, metricInfo map[string]interface{}) {
 	sum := metric.Sum()
 	dataPoints := sum.DataPoints()
 	
@@ -160,7 +160,7 @@ func (p *metricsProcessor) processSum(ctx context.Context, metric pmetric.Metric
 	}
 }
 
-func (p *metricsProcessor) processHistogram(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource, metricInfo map[string]interface{}) {
+func (p *fullMetricsProcessor) processHistogram(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource, metricInfo map[string]interface{}) {
 	histogram := metric.Histogram()
 	dataPoints := histogram.DataPoints()
 	
@@ -174,7 +174,7 @@ func (p *metricsProcessor) processHistogram(ctx context.Context, metric pmetric.
 	}
 }
 
-func (p *metricsProcessor) processSummary(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource, metricInfo map[string]interface{}) {
+func (p *fullMetricsProcessor) processSummary(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource, metricInfo map[string]interface{}) {
 	summary := metric.Summary()
 	dataPoints := summary.DataPoints()
 	
@@ -189,7 +189,7 @@ func (p *metricsProcessor) processSummary(ctx context.Context, metric pmetric.Me
 	}
 }
 
-func (p *metricsProcessor) processExponentialHistogram(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource, metricInfo map[string]interface{}) {
+func (p *fullMetricsProcessor) processExponentialHistogram(ctx context.Context, metric pmetric.Metric, resource pcommon.Resource, metricInfo map[string]interface{}) {
 	histogram := metric.ExponentialHistogram()
 	dataPoints := histogram.DataPoints()
 	
@@ -206,7 +206,7 @@ func (p *metricsProcessor) processExponentialHistogram(ctx context.Context, metr
 	}
 }
 
-func (p *metricsProcessor) processDataPoint(ctx context.Context, metric pmetric.Metric, dp pmetric.NumberDataPoint, resource pcommon.Resource, metricInfo map[string]interface{}) {
+func (p *fullMetricsProcessor) processDataPoint(ctx context.Context, metric pmetric.Metric, dp pmetric.NumberDataPoint, resource pcommon.Resource, metricInfo map[string]interface{}) {
 	// Add data point attributes to metric info
 	pointInfo := make(map[string]interface{})
 	for k, v := range metricInfo {
@@ -230,7 +230,7 @@ func (p *metricsProcessor) processDataPoint(ctx context.Context, metric pmetric.
 	}
 }
 
-func (p *metricsProcessor) extractEntities(ctx context.Context, metric pmetric.Metric, dp pmetric.NumberDataPoint, metricInfo map[string]interface{}) {
+func (p *fullMetricsProcessor) extractEntities(ctx context.Context, metric pmetric.Metric, dp pmetric.NumberDataPoint, metricInfo map[string]interface{}) {
 	// Call entity extractor model
 	result, err := p.wasmRuntime.ExtractEntities(ctx, metricInfo)
 	if err != nil {
@@ -245,7 +245,7 @@ func (p *metricsProcessor) extractEntities(ctx context.Context, metric pmetric.M
 	}
 }
 
-func (p *metricsProcessor) shutdown(ctx context.Context) error {
+func (p *fullMetricsProcessor) shutdown(ctx context.Context) error {
 	if p.wasmRuntime != nil {
 		return p.wasmRuntime.Close()
 	}

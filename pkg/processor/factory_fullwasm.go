@@ -1,7 +1,7 @@
-//go:build !fullwasm
-// +build !fullwasm
+//go:build fullwasm
+// +build fullwasm
 
-// This file contains the stub-specific factory implementation
+// This file contains the fullwasm-specific factory implementation
 
 package processor
 

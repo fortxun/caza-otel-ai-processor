@@ -1,7 +1,7 @@
-//go:build !fullwasm
-// +build !fullwasm
+//go:build fullwasm
+// +build fullwasm
 
-// This file contains common definitions for both stub and full processor implementations
+// This file contains common definitions for fullwasm processor implementation
 
 package processor
 
@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-// Common interfaces used by both stub and full implementations
+// Common interfaces used by fullwasm implementation
 
 // tracesProcessor processes trace data
 type tracesProcessor interface {
@@ -35,7 +35,7 @@ type logsProcessor interface {
 	shutdown(ctx context.Context) error
 }
 
-// Common wrappers for all processor implementations
+// Common wrappers for fullwasm processor implementations
 
 // tracesProcessorWrapper implements processor.Traces
 type tracesProcessorWrapper struct {

@@ -8,19 +8,19 @@ import (
 
 func TestConfigDefaults(t *testing.T) {
 	// Get the default configuration
-	config := createDefaultConfig().(*Config)
+	config := CreateDefaultConfig().(*Config)
 	
 	// Test default model configurations
 	assert.Equal(t, "/models/error-classifier.wasm", config.Models.ErrorClassifier.Path)
-	assert.Equal(t, 100, config.Models.ErrorClassifier.MemoryLimit)
+	assert.Equal(t, 100, config.Models.ErrorClassifier.MemoryLimitMB)
 	assert.Equal(t, 50, config.Models.ErrorClassifier.TimeoutMs)
 	
 	assert.Equal(t, "/models/importance-sampler.wasm", config.Models.ImportanceSampler.Path)
-	assert.Equal(t, 80, config.Models.ImportanceSampler.MemoryLimit)
+	assert.Equal(t, 80, config.Models.ImportanceSampler.MemoryLimitMB)
 	assert.Equal(t, 30, config.Models.ImportanceSampler.TimeoutMs)
 	
 	assert.Equal(t, "/models/entity-extractor.wasm", config.Models.EntityExtractor.Path)
-	assert.Equal(t, 150, config.Models.EntityExtractor.MemoryLimit)
+	assert.Equal(t, 150, config.Models.EntityExtractor.MemoryLimitMB)
 	assert.Equal(t, 50, config.Models.EntityExtractor.TimeoutMs)
 	
 	// Test default processing configurations
@@ -53,17 +53,17 @@ func TestConfigCustomValues(t *testing.T) {
 		Models: ModelsConfig{
 			ErrorClassifier: ModelConfig{
 				Path:        "/custom/path/error-model.wasm",
-				MemoryLimit: 200,
+				MemoryLimitMB: 200,
 				TimeoutMs:   100,
 			},
 			ImportanceSampler: ModelConfig{
 				Path:        "/custom/path/sampler-model.wasm",
-				MemoryLimit: 150,
+				MemoryLimitMB: 150,
 				TimeoutMs:   75,
 			},
 			EntityExtractor: ModelConfig{
 				Path:        "/custom/path/entity-model.wasm",
-				MemoryLimit: 250,
+				MemoryLimitMB: 250,
 				TimeoutMs:   120,
 			},
 		},
@@ -94,15 +94,15 @@ func TestConfigCustomValues(t *testing.T) {
 	
 	// Test custom model configurations
 	assert.Equal(t, "/custom/path/error-model.wasm", config.Models.ErrorClassifier.Path)
-	assert.Equal(t, 200, config.Models.ErrorClassifier.MemoryLimit)
+	assert.Equal(t, 200, config.Models.ErrorClassifier.MemoryLimitMB)
 	assert.Equal(t, 100, config.Models.ErrorClassifier.TimeoutMs)
 	
 	assert.Equal(t, "/custom/path/sampler-model.wasm", config.Models.ImportanceSampler.Path)
-	assert.Equal(t, 150, config.Models.ImportanceSampler.MemoryLimit)
+	assert.Equal(t, 150, config.Models.ImportanceSampler.MemoryLimitMB)
 	assert.Equal(t, 75, config.Models.ImportanceSampler.TimeoutMs)
 	
 	assert.Equal(t, "/custom/path/entity-model.wasm", config.Models.EntityExtractor.Path)
-	assert.Equal(t, 250, config.Models.EntityExtractor.MemoryLimit)
+	assert.Equal(t, 250, config.Models.EntityExtractor.MemoryLimitMB)
 	assert.Equal(t, 120, config.Models.EntityExtractor.TimeoutMs)
 	
 	// Test custom processing configurations

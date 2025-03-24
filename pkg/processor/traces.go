@@ -17,7 +17,8 @@ import (
 	"github.com/fortxun/caza-otel-ai-processor/pkg/runtime"
 )
 
-type tracesProcessor struct {
+// fullTracesProcessor is the implementation of tracesProcessor for the fullwasm build
+type fullTracesProcessor struct {
 	logger       *zap.Logger
 	config       *Config
 	nextConsumer consumer.Traces
@@ -28,7 +29,7 @@ func newTracesProcessor(
 	logger *zap.Logger,
 	config *Config,
 	nextConsumer consumer.Traces,
-) (*tracesProcessor, error) {
+) (tracesProcessor, error) {
 	// Initialize WASM runtime
 	wasmRuntime, err := runtime.NewWasmRuntime(logger, &runtime.WasmRuntimeConfig{
 		ErrorClassifierPath:   config.Models.ErrorClassifier.Path,
@@ -42,7 +43,7 @@ func newTracesProcessor(
 		return nil, fmt.Errorf("failed to initialize WASM runtime: %w", err)
 	}
 
-	return &tracesProcessor{
+	return &fullTracesProcessor{
 		logger:       logger,
 		config:       config,
 		nextConsumer: nextConsumer,
@@ -50,7 +51,7 @@ func newTracesProcessor(
 	}, nil
 }
 
-func (p *tracesProcessor) processTraces(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
+func (p *fullTracesProcessor) processTraces(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
 	// If no AI features are enabled, pass through the data unchanged
 	if !p.config.Features.ErrorClassification && 
 	   !p.config.Features.SmartSampling && 
@@ -90,7 +91,7 @@ func (p *tracesProcessor) processTraces(ctx context.Context, td ptrace.Traces) (
 }
 
 // Process traces in parallel for better performance
-func (p *tracesProcessor) processTracesParallel(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
+func (p *fullTracesProcessor) processTracesParallel(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
 	// Create a worker pool
 	numWorkers := p.config.Processing.MaxParallelWorkers
 	if numWorkers <= 0 {
@@ -124,7 +125,7 @@ func (p *tracesProcessor) processTracesParallel(ctx context.Context, td ptrace.T
 	return td, nil
 }
 
-func (p *tracesProcessor) processSpan(ctx context.Context, span ptrace.Span, resource pcommon.Resource) {
+func (p *fullTracesProcessor) processSpan(ctx context.Context, span ptrace.Span, resource pcommon.Resource) {
 	// Extract error information if this is an error span
 	if span.Status().Code() == ptrace.StatusCodeError {
 		if p.config.Features.ErrorClassification {
@@ -138,7 +139,7 @@ func (p *tracesProcessor) processSpan(ctx context.Context, span ptrace.Span, res
 	}
 }
 
-func (p *tracesProcessor) classifyError(ctx context.Context, span ptrace.Span, resource pcommon.Resource) {
+func (p *fullTracesProcessor) classifyError(ctx context.Context, span ptrace.Span, resource pcommon.Resource) {
 	// Prepare error information for classification
 	errorInfo := map[string]interface{}{
 		"name":        span.Name(),
@@ -162,7 +163,7 @@ func (p *tracesProcessor) classifyError(ctx context.Context, span ptrace.Span, r
 	}
 }
 
-func (p *tracesProcessor) extractEntities(ctx context.Context, span ptrace.Span, resource pcommon.Resource) {
+func (p *fullTracesProcessor) extractEntities(ctx context.Context, span ptrace.Span, resource pcommon.Resource) {
 	// Prepare span information for entity extraction
 	spanInfo := map[string]interface{}{
 		"name":        span.Name(),
@@ -184,7 +185,7 @@ func (p *tracesProcessor) extractEntities(ctx context.Context, span ptrace.Span,
 	}
 }
 
-func (p *tracesProcessor) sampleTraces(ctx context.Context, td ptrace.Traces) ptrace.Traces {
+func (p *fullTracesProcessor) sampleTraces(ctx context.Context, td ptrace.Traces) ptrace.Traces {
 	// Create a new Traces object to hold the sampled traces
 	sampled := ptrace.NewTraces()
 	
@@ -221,7 +222,7 @@ func (p *tracesProcessor) sampleTraces(ctx context.Context, td ptrace.Traces) pt
 	return sampled
 }
 
-func (p *tracesProcessor) makeSamplingDecision(ctx context.Context, span ptrace.Span, resource pcommon.Resource) bool {
+func (p *fullTracesProcessor) makeSamplingDecision(ctx context.Context, span ptrace.Span, resource pcommon.Resource) bool {
 	// Always keep error spans if configured
 	if span.Status().Code() == ptrace.StatusCodeError && p.config.Sampling.ErrorEvents >= 1.0 {
 		return true
@@ -263,7 +264,7 @@ func (p *tracesProcessor) makeSamplingDecision(ctx context.Context, span ptrace.
 	return randomSample(p.config.Sampling.NormalSpans * importance)
 }
 
-func (p *tracesProcessor) shutdown(ctx context.Context) error {
+func (p *fullTracesProcessor) shutdown(ctx context.Context) error {
 	if p.wasmRuntime != nil {
 		return p.wasmRuntime.Close()
 	}
