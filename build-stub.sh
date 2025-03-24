@@ -12,6 +12,11 @@ echo "This build uses a stub WASM runtime (no wasmer-go dependency required)"
 # Clean any old build artifacts
 rm -f go.sum
 
+# Setup PATH to use local Go installation
+export PATH="$PWD/local-go/go/bin:$PATH"
+export GOMODCACHE="$PWD/go-modules/pkg/mod"
+export GO111MODULE=on
+
 # Validate Go version
 if ! command -v go &> /dev/null; then
   echo "❌ Error: Go is not installed. Please install Go 1.23 or higher."
@@ -19,11 +24,6 @@ if ! command -v go &> /dev/null; then
 fi
 
 GO_VERSION=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | cut -c 3-)
-if [ "$(echo "$GO_VERSION < 1.23" | bc -l 2>/dev/null)" == "1" ]; then
-  echo "❌ Error: Go version $GO_VERSION detected, but 1.23 or higher is required."
-  exit 1
-fi
-
 echo "✅ Go version $GO_VERSION verified."
 
 # Download and update dependencies

@@ -1,0 +1,41 @@
+# Dockerfile for building the CAZA OpenTelemetry AI Processor (Stub Implementation)
+FROM golang:1.23 AS builder
+
+WORKDIR /app
+
+# Copy only what we need for the build, in the right order for layering
+COPY go.mod ./
+COPY go.sum* ./
+
+# Explicitly get required dependencies
+RUN go get -v go.opentelemetry.io/collector/pdata/pcommon \
+    go.opentelemetry.io/collector/pdata/ptrace \
+    github.com/hashicorp/golang-lru/v2 \
+    go.uber.org/zap \
+    go.opentelemetry.io/collector/component \
+    go.opentelemetry.io/collector/consumer \
+    go.opentelemetry.io/collector/pdata/plog \
+    go.opentelemetry.io/collector/pdata/pmetric \
+    go.opentelemetry.io/collector/processor \
+    go.opentelemetry.io/collector/confmap \
+    go.opentelemetry.io/collector/confmap/provider/fileprovider \
+    go.opentelemetry.io/collector/exporter/otlpexporter \
+    go.opentelemetry.io/collector/otelcol \
+    go.opentelemetry.io/collector/receiver/otlpreceiver
+
+# Copy source code
+COPY cmd/ cmd/
+COPY pkg/ pkg/
+
+# Build the application with the stub implementation (no wasmer-go dependency)
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o /app/otel-ai-processor ./cmd/processor
+
+# Run short unit tests
+RUN go test -short ./pkg/processor/...
+
+# Create a script to copy the binary to the host
+RUN echo "#!/bin/sh" > /app/copy-binary.sh && \
+    echo "cp /app/otel-ai-processor /output/" >> /app/copy-binary.sh && \
+    chmod +x /app/copy-binary.sh
+
+CMD ["/app/copy-binary.sh"]
