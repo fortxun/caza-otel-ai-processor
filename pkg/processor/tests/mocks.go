@@ -54,6 +54,27 @@ func (m *MockWasmRuntime) Close() error {
 	return nil
 }
 
+// NewMockWasmRuntime creates a new MockWasmRuntime with default values
+func NewMockWasmRuntime() *MockWasmRuntime {
+	return &MockWasmRuntime{
+		ClassifyErrorOutput: map[string]interface{}{
+			"category":   "database_error",
+			"owner":      "database-team",
+			"severity":   "high",
+			"confidence": 0.9,
+		},
+		SampleTelemetryOutput: map[string]interface{}{
+			"importance": 0.8,
+			"keep":       true,
+		},
+		ExtractEntitiesOutput: map[string]interface{}{
+			"services":     []string{"user-service", "api-gateway"},
+			"dependencies": []string{"postgres", "redis"},
+			"confidence":   0.85,
+		},
+	}
+}
+
 // MockConsumer is a mock implementation for testing
 type MockConsumer struct {
 	// MockTraceConsumer implementation
@@ -266,4 +287,186 @@ func CreateTestLogs(numLogs int, errorSeverity bool) plog.Logs {
 	}
 	
 	return logs
+}
+
+// TestData is a utility struct for creating test data
+type TestData struct{}
+
+// CreateTestTraces creates test traces with resource and span attributes
+func (td *TestData) CreateTestTraces(resourceAttrs map[string]interface{}, spanAttrs map[string]interface{}, statusCode ptrace.StatusCode) ptrace.Traces {
+	traces := ptrace.NewTraces()
+	
+	rs := traces.ResourceSpans().AppendEmpty()
+	resource := rs.Resource()
+	
+	// Set resource attributes if provided
+	if resourceAttrs != nil {
+		for k, v := range resourceAttrs {
+			switch val := v.(type) {
+			case string:
+				resource.Attributes().PutStr(k, val)
+			case bool:
+				resource.Attributes().PutBool(k, val)
+			case int:
+				resource.Attributes().PutInt(k, int64(val))
+			case float64:
+				resource.Attributes().PutDouble(k, val)
+			}
+		}
+	} else {
+		// Default attributes
+		resource.Attributes().PutStr("service.name", "test-service")
+		resource.Attributes().PutStr("deployment.environment", "production")
+	}
+	
+	ss := rs.ScopeSpans().AppendEmpty()
+	scope := ss.Scope()
+	scope.SetName("test-scope")
+	scope.SetVersion("v1.0.0")
+	
+	span := ss.Spans().AppendEmpty()
+	span.SetName("test-operation")
+	span.SetTraceID(pcommon.TraceID([16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}))
+	span.SetSpanID(pcommon.SpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8}))
+	
+	startTime := pcommon.Timestamp(1000000000)
+	span.SetStartTimestamp(startTime)
+	span.SetEndTimestamp(startTime + 500000000) // 500ms duration
+	
+	span.Status().SetCode(statusCode)
+	if statusCode == ptrace.StatusCodeError {
+		span.Status().SetMessage("Test error message")
+	}
+	
+	// Set span attributes if provided
+	if spanAttrs != nil {
+		for k, v := range spanAttrs {
+			switch val := v.(type) {
+			case string:
+				span.Attributes().PutStr(k, val)
+			case bool:
+				span.Attributes().PutBool(k, val)
+			case int:
+				span.Attributes().PutInt(k, int64(val))
+			case float64:
+				span.Attributes().PutDouble(k, val)
+			}
+		}
+	} else {
+		// Default attributes
+		span.Attributes().PutStr("operation.type", "test")
+		span.Attributes().PutBool("internal", true)
+	}
+	
+	return traces
+}
+
+// CreateTestLogs creates test logs with resource attributes and a log message
+func (td *TestData) CreateTestLogs(resourceAttrs map[string]interface{}, severityNumber plog.SeverityNumber, message string) plog.Logs {
+	logs := plog.NewLogs()
+	
+	rl := logs.ResourceLogs().AppendEmpty()
+	resource := rl.Resource()
+	
+	// Set resource attributes if provided
+	if resourceAttrs != nil {
+		for k, v := range resourceAttrs {
+			switch val := v.(type) {
+			case string:
+				resource.Attributes().PutStr(k, val)
+			case bool:
+				resource.Attributes().PutBool(k, val)
+			case int:
+				resource.Attributes().PutInt(k, int64(val))
+			case float64:
+				resource.Attributes().PutDouble(k, val)
+			}
+		}
+	} else {
+		// Default attributes
+		resource.Attributes().PutStr("service.name", "test-service")
+		resource.Attributes().PutStr("deployment.environment", "production")
+	}
+	
+	sl := rl.ScopeLogs().AppendEmpty()
+	scope := sl.Scope()
+	scope.SetName("test-scope")
+	scope.SetVersion("v1.0.0")
+	
+	log := sl.LogRecords().AppendEmpty()
+	log.SetTimestamp(pcommon.Timestamp(1000000000))
+	
+	if message != "" {
+		log.Body().SetStr(message)
+	} else {
+		log.Body().SetStr("This is a test log message")
+	}
+	
+	log.SetSeverityNumber(severityNumber)
+	if severityNumber == plog.SeverityNumberError {
+		log.SetSeverityText("ERROR")
+	} else if severityNumber == plog.SeverityNumberWarn {
+		log.SetSeverityText("WARN")
+	} else {
+		log.SetSeverityText("INFO")
+	}
+	
+	// Add default attributes
+	log.Attributes().PutStr("component", "test")
+	log.Attributes().PutBool("internal", true)
+	log.Attributes().PutInt("attempt", 1)
+	
+	return logs
+}
+
+// CreateTestMetrics creates test metrics with resource attributes and a metric value
+func (td *TestData) CreateTestMetrics(resourceAttrs map[string]interface{}, metricName string, value float64) pmetric.Metrics {
+	metrics := pmetric.NewMetrics()
+	
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	resource := rm.Resource()
+	
+	// Set resource attributes if provided
+	if resourceAttrs != nil {
+		for k, v := range resourceAttrs {
+			switch val := v.(type) {
+			case string:
+				resource.Attributes().PutStr(k, val)
+			case bool:
+				resource.Attributes().PutBool(k, val)
+			case int:
+				resource.Attributes().PutInt(k, int64(val))
+			case float64:
+				resource.Attributes().PutDouble(k, val)
+			}
+		}
+	} else {
+		// Default attributes
+		resource.Attributes().PutStr("service.name", "test-service")
+		resource.Attributes().PutStr("deployment.environment", "production")
+	}
+	
+	sm := rm.ScopeMetrics().AppendEmpty()
+	scope := sm.Scope()
+	scope.SetName("test-scope")
+	scope.SetVersion("v1.0.0")
+	
+	metric := sm.Metrics().AppendEmpty()
+	if metricName != "" {
+		metric.SetName(metricName)
+	} else {
+		metric.SetName("test.metric")
+	}
+	metric.SetDescription("Test metric")
+	
+	gauge := metric.SetEmptyGauge()
+	dp := gauge.DataPoints().AppendEmpty()
+	dp.SetTimestamp(pcommon.Timestamp(1000000000))
+	dp.SetDoubleValue(value)
+	
+	// Add default attributes
+	dp.Attributes().PutStr("operation", "test")
+	dp.Attributes().PutBool("internal", true)
+	
+	return metrics
 }
