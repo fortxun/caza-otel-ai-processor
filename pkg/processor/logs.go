@@ -1,4 +1,7 @@
-// This file contains the implementation of the logs processor with WASM support
+//go:build fullwasm
+// +build fullwasm
+
+// This file contains the full implementation of the logs processor with WASM support
 
 package processor
 
@@ -13,7 +16,7 @@ import (
 	"github.com/fortxun/caza-otel-ai-processor/pkg/runtime"
 )
 
-type logsProcessor struct {
+type fullLogsProcessor struct {
 	logger       *zap.Logger
 	config       *Config
 	nextConsumer consumer.Logs
@@ -24,7 +27,7 @@ func newLogsProcessor(
 	logger *zap.Logger,
 	config *Config,
 	nextConsumer consumer.Logs,
-) (*logsProcessor, error) {
+) (logsProcessor, error) {
 	// Initialize WASM runtime
 	wasmRuntime, err := runtime.NewWasmRuntime(logger, &runtime.WasmRuntimeConfig{
 		ErrorClassifierPath:   config.Models.ErrorClassifier.Path,
@@ -38,7 +41,7 @@ func newLogsProcessor(
 		return nil, err
 	}
 
-	return &logsProcessor{
+	return &fullLogsProcessor{
 		logger:       logger,
 		config:       config,
 		nextConsumer: nextConsumer,
@@ -46,7 +49,7 @@ func newLogsProcessor(
 	}, nil
 }
 
-func (p *logsProcessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
+func (p *fullLogsProcessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
 	// If no AI features are enabled, pass through the data unchanged
 	if !p.config.Features.ErrorClassification && 
 	   !p.config.Features.SmartSampling && 
@@ -80,7 +83,7 @@ func (p *logsProcessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Log
 }
 
 // Process logs in parallel for better performance
-func (p *logsProcessor) processLogsParallel(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
+func (p *fullLogsProcessor) processLogsParallel(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
 	// Create a worker pool
 	numWorkers := p.config.Processing.MaxParallelWorkers
 	if numWorkers <= 0 {
@@ -109,7 +112,7 @@ func (p *logsProcessor) processLogsParallel(ctx context.Context, ld plog.Logs) (
 	return ld, nil
 }
 
-func (p *logsProcessor) processLogRecord(ctx context.Context, log plog.LogRecord, resource pcommon.Resource) {
+func (p *fullLogsProcessor) processLogRecord(ctx context.Context, log plog.LogRecord, resource pcommon.Resource) {
 	// Extract information for classification
 	logInfo := map[string]interface{}{
 		"severity":    log.SeverityText(),
@@ -129,7 +132,7 @@ func (p *logsProcessor) processLogRecord(ctx context.Context, log plog.LogRecord
 	}
 }
 
-func (p *logsProcessor) classifyLogError(ctx context.Context, log plog.LogRecord, logInfo map[string]interface{}) {
+func (p *fullLogsProcessor) classifyLogError(ctx context.Context, log plog.LogRecord, logInfo map[string]interface{}) {
 	// Call error classifier model
 	result, err := p.wasmRuntime.ClassifyError(ctx, logInfo)
 	if err != nil {
@@ -144,7 +147,7 @@ func (p *logsProcessor) classifyLogError(ctx context.Context, log plog.LogRecord
 	}
 }
 
-func (p *logsProcessor) extractLogEntities(ctx context.Context, log plog.LogRecord, logInfo map[string]interface{}) {
+func (p *fullLogsProcessor) extractLogEntities(ctx context.Context, log plog.LogRecord, logInfo map[string]interface{}) {
 	// Call entity extractor model
 	result, err := p.wasmRuntime.ExtractEntities(ctx, logInfo)
 	if err != nil {
@@ -159,7 +162,7 @@ func (p *logsProcessor) extractLogEntities(ctx context.Context, log plog.LogReco
 	}
 }
 
-func (p *logsProcessor) shutdown(ctx context.Context) error {
+func (p *fullLogsProcessor) shutdown(ctx context.Context) error {
 	if p.wasmRuntime != nil {
 		return p.wasmRuntime.Close()
 	}

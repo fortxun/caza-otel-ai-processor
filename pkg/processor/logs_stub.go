@@ -15,7 +15,7 @@ import (
 	"github.com/fortxun/caza-otel-ai-processor/pkg/runtime"
 )
 
-type logsProcessor struct {
+type stubLogsProcessor struct {
 	logger       *zap.Logger
 	config       *Config
 	nextConsumer consumer.Logs
@@ -26,21 +26,21 @@ func newLogsProcessor(
 	logger *zap.Logger,
 	config *Config,
 	nextConsumer consumer.Logs,
-) (*logsProcessor, error) {
+) (logsProcessor, error) {
 	// Initialize WASM runtime
 	wasmRuntime, err := runtime.NewWasmRuntime(logger, &runtime.WasmRuntimeConfig{
 		ErrorClassifierPath:   config.Models.ErrorClassifier.Path,
-		ErrorClassifierMemory: config.Models.ErrorClassifier.MemoryLimit,
+		ErrorClassifierMemory: config.Models.ErrorClassifier.MemoryLimitMB,
 		SamplerPath:           config.Models.ImportanceSampler.Path,
-		SamplerMemory:         config.Models.ImportanceSampler.MemoryLimit,
+		SamplerMemory:         config.Models.ImportanceSampler.MemoryLimitMB,
 		EntityExtractorPath:   config.Models.EntityExtractor.Path,
-		EntityExtractorMemory: config.Models.EntityExtractor.MemoryLimit,
+		EntityExtractorMemory: config.Models.EntityExtractor.MemoryLimitMB,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &logsProcessor{
+	return &stubLogsProcessor{
 		logger:       logger,
 		config:       config,
 		nextConsumer: nextConsumer,
@@ -48,13 +48,13 @@ func newLogsProcessor(
 	}, nil
 }
 
-func (p *logsProcessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
+func (p *stubLogsProcessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
 	// Stub implementation just passes logs through
 	p.logger.Debug("Stub logs processor called", 
 		zap.Int("log_record_count", ld.LogRecordCount()))
 	return ld, nil
 }
 
-func (p *logsProcessor) shutdown(ctx context.Context) error {
+func (p *stubLogsProcessor) shutdown(ctx context.Context) error {
 	return p.wasmRuntime.Close()
 }

@@ -1,3 +1,6 @@
+//go:build fullwasm
+// +build fullwasm
+
 // This file contains the full implementation of the traces processor with WASM support
 
 package processor

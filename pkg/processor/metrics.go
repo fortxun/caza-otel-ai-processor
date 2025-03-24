@@ -1,4 +1,7 @@
-// This file contains the implementation of the metrics processor with WASM support
+//go:build fullwasm
+// +build fullwasm
+
+// This file contains the full implementation of the metrics processor with WASM support
 
 package processor
 
@@ -13,7 +16,7 @@ import (
 	"github.com/fortxun/caza-otel-ai-processor/pkg/runtime"
 )
 
-type metricsProcessor struct {
+type fullMetricsProcessor struct {
 	logger       *zap.Logger
 	config       *Config
 	nextConsumer consumer.Metrics
@@ -24,7 +27,7 @@ func newMetricsProcessor(
 	logger *zap.Logger,
 	config *Config,
 	nextConsumer consumer.Metrics,
-) (*metricsProcessor, error) {
+) (metricsProcessor, error) {
 	// Initialize WASM runtime
 	wasmRuntime, err := runtime.NewWasmRuntime(logger, &runtime.WasmRuntimeConfig{
 		ErrorClassifierPath:   config.Models.ErrorClassifier.Path,
@@ -38,7 +41,7 @@ func newMetricsProcessor(
 		return nil, err
 	}
 
-	return &metricsProcessor{
+	return &fullMetricsProcessor{
 		logger:       logger,
 		config:       config,
 		nextConsumer: nextConsumer,
@@ -46,7 +49,7 @@ func newMetricsProcessor(
 	}, nil
 }
 
-func (p *metricsProcessor) processMetrics(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
+func (p *fullMetricsProcessor) processMetrics(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
 	// If no AI features are enabled, pass through the data unchanged
 	if !p.config.Features.ErrorClassification && 
 	   !p.config.Features.SmartSampling && 

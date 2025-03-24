@@ -93,10 +93,9 @@ func TestWasmIntegration(t *testing.T) {
 	defaultConfig.Output.MaxAttributeLength = 256
 
 	// Create processor settings
-	settings := otprocessor.CreateSettings{
+	settings := otprocessor.Settings{
 		TelemetrySettings: component.TelemetrySettings{},
 		BuildInfo:         component.BuildInfo{},
-		ID:                component.NewID("ai_processor"),
 		Logger:            logger,
 	}
 

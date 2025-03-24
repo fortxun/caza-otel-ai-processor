@@ -1,7 +1,7 @@
 //go:build !fullwasm
 // +build !fullwasm
 
-// This file contains the stub implementation of the metrics processor
+// This file contains the stub implementation of the traces processor
 
 package processor
 
@@ -9,24 +9,25 @@ import (
 	"context"
 
 	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
 
 	"github.com/fortxun/caza-otel-ai-processor/pkg/runtime"
 )
 
-type stubMetricsProcessor struct {
+type stubTracesProcessor struct {
 	logger       *zap.Logger
 	config       *Config
-	nextConsumer consumer.Metrics
+	nextConsumer consumer.Traces
 	wasmRuntime  *runtime.WasmRuntime
 }
 
-func newMetricsProcessor(
+func newTracesProcessor(
 	logger *zap.Logger,
 	config *Config,
-	nextConsumer consumer.Metrics,
-) (metricsProcessor, error) {
+	nextConsumer consumer.Traces,
+) (tracesProcessor, error) {
 	// Initialize WASM runtime
 	wasmRuntime, err := runtime.NewWasmRuntime(logger, &runtime.WasmRuntimeConfig{
 		ErrorClassifierPath:   config.Models.ErrorClassifier.Path,
@@ -40,7 +41,7 @@ func newMetricsProcessor(
 		return nil, err
 	}
 
-	return &stubMetricsProcessor{
+	return &stubTracesProcessor{
 		logger:       logger,
 		config:       config,
 		nextConsumer: nextConsumer,
@@ -48,13 +49,13 @@ func newMetricsProcessor(
 	}, nil
 }
 
-func (p *stubMetricsProcessor) processMetrics(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
-	// Stub implementation just passes metrics through
-	p.logger.Debug("Stub metrics processor called", 
-		zap.Int("metric_count", md.MetricCount()))
-	return md, nil
+func (p *stubTracesProcessor) processTraces(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
+	// Stub implementation just passes traces through
+	p.logger.Debug("Stub traces processor called", 
+		zap.Int("span_count", td.SpanCount()))
+	return td, nil
 }
 
-func (p *stubMetricsProcessor) shutdown(ctx context.Context) error {
+func (p *stubTracesProcessor) shutdown(ctx context.Context) error {
 	return p.wasmRuntime.Close()
 }
