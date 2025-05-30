@@ -93,13 +93,13 @@ func (rg *ReportGenerator) generateSummary(anomalies []models.Anomaly, rootCause
 	
 	for _, anomaly := range anomalies {
 		switch anomaly.MetricType {
-		case metrics.MetricTypeLatency:
+		case models.MetricTypeLatency:
 			latencyAnomalies++
-		case metrics.MetricTypeTraffic:
+		case models.MetricTypeTraffic:
 			trafficAnomalies++
-		case metrics.MetricTypeError:
+		case models.MetricTypeError:
 			errorAnomalies++
-		case metrics.MetricTypeSaturation:
+		case models.MetricTypeSaturation:
 			saturationAnomalies++
 		}
 	}
