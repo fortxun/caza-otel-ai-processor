@@ -2,8 +2,10 @@ package analysis
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strings"
 	"strconv"
@@ -17,17 +19,30 @@ import (
 )
 
 type RootCauseAnalysisEngine struct {
-	logger       *zap.Logger
-	config       *config.RootCauseAnalysisConfig
-	llmClient    *llm.Client
-	knowledgeBase *KnowledgeBase
+	logger             *zap.Logger
+	config             *config.RootCauseAnalysisConfig
+	llmClient          *llm.Client
+	knowledgeBase      *KnowledgeBase
+	correlationAnalyzer *CorrelationAnalyzer
+	historicalAnomalies []models.Anomaly
 }
 
 type MetricCorrelation struct {
 	SourceMetric string `json:"source_metric"`
 	TargetMetric string `json:"target_metric"`
-	Coefficient float64 `json:"coefficient"`
-	TimeOffset int `json:"time_offset"`
+	Coefficient  float64 `json:"coefficient"`
+	TimeOffset   int `json:"time_offset"`
+	Direction    int `json:"direction"`
+	Method       string `json:"method"`
+}
+
+type CausalRelationship struct {
+	CauseMetric   string  `json:"cause_metric"`
+	EffectMetric  string  `json:"effect_metric"`
+	Strength      float64 `json:"strength"`
+	Confidence    float64 `json:"confidence"`
+	TimeDelay     int     `json:"time_delay"`
+	DirectionType string  `json:"direction_type"` // "positive" or "negative"
 }
 
 func NewRootCauseAnalysisEngine(config *config.RootCauseAnalysisConfig, llmClient *llm.Client, logger *zap.Logger) (*RootCauseAnalysisEngine, error) {
@@ -45,11 +60,20 @@ func NewRootCauseAnalysisEngine(config *config.RootCauseAnalysisConfig, llmClien
 		}
 	}
 
+	correlationConfig := &CorrelationConfig{
+		Methods:        []string{"pearson", "spearman", "lagged"},
+		MinCorrelation: config.CorrelationThreshold,
+		LagWindow:      5,
+		MinDataPoints:  10,
+	}
+
 	return &RootCauseAnalysisEngine{
-		logger:       logger,
-		config:       config,
-		llmClient:    llmClient,
-		knowledgeBase: kb,
+		logger:             logger,
+		config:             config,
+		llmClient:          llmClient,
+		knowledgeBase:      kb,
+		correlationAnalyzer: NewCorrelationAnalyzer(correlationConfig, logger),
+		historicalAnomalies: make([]models.Anomaly, 0, 100),
 	}, nil
 }
 
@@ -66,15 +90,60 @@ func (rca *RootCauseAnalysisEngine) AnalyzeAnomaly(ctx context.Context, anomaly 
 
 	anomalyID := fmt.Sprintf("%s-%d", anomaly.MetricName, anomaly.Timestamp.Unix())
 
-	correlations, err := rca.findCorrelatedMetrics(anomaly, allMetrics, historicalData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find correlated metrics: %w", err)
-	}
+	rca.addHistoricalAnomaly(anomaly)
 
+	correlationResults, err := rca.correlationAnalyzer.AnalyzeCorrelations(anomaly.MetricName, historicalData)
+	if err != nil {
+		rca.logger.Warn("Failed to analyze correlations, falling back to basic correlation",
+			zap.String("metric", anomaly.MetricName),
+			zap.Error(err))
+		
+		correlations, err := rca.findCorrelatedMetrics(anomaly, allMetrics, historicalData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find correlated metrics: %w", err)
+		}
+		
+		return rca.analyzeWithCorrelations(ctx, anomaly, correlations, allMetrics, historicalData)
+	}
+	
+	// Convert correlation results to metric correlations
+	correlations := make([]MetricCorrelation, len(correlationResults))
+	for i, result := range correlationResults {
+		correlations[i] = MetricCorrelation{
+			SourceMetric: result.SourceMetric,
+			TargetMetric: result.TargetMetric,
+			Coefficient:  result.Coefficient,
+			TimeOffset:   result.TimeOffset,
+			Direction:    result.Direction,
+			Method:       result.Method,
+		}
+	}
+	
+	causalRelationships := rca.inferCausalRelationships(correlations, historicalData)
+	
 	sort.Slice(correlations, func(i, j int) bool {
 		return math.Abs(correlations[i].Coefficient) > math.Abs(correlations[j].Coefficient)
 	})
+	
+	return rca.analyzeWithCorrelationsAndCausality(ctx, anomaly, correlations, causalRelationships, allMetrics, historicalData)
+}
 
+func (rca *RootCauseAnalysisEngine) addHistoricalAnomaly(anomaly models.Anomaly) {
+	rca.historicalAnomalies = append(rca.historicalAnomalies, anomaly)
+	if len(rca.historicalAnomalies) > 100 {
+		rca.historicalAnomalies = rca.historicalAnomalies[len(rca.historicalAnomalies)-100:]
+	}
+}
+
+func (rca *RootCauseAnalysisEngine) analyzeWithCorrelations(
+	ctx context.Context,
+	anomaly models.Anomaly,
+	correlations []MetricCorrelation,
+	allMetrics []metrics.Metric,
+	historicalData map[string]*metrics.TimeSeriesMetric,
+) (*models.RootCause, error) {
+	anomalyID := fmt.Sprintf("%s-%d", anomaly.MetricName, anomaly.Timestamp.Unix())
+	
 	maxRelated := 5
 	if len(correlations) < maxRelated {
 		maxRelated = len(correlations)
@@ -87,13 +156,15 @@ func (rca *RootCauseAnalysisEngine) AnalyzeAnomaly(ctx context.Context, anomaly 
 	var knowledgeBaseMatch bool
 	var knowledgeBaseID string
 	var recommendations []string
+	var knowledgeMatches []KnowledgeEntry
 
 	if rca.config.KnowledgeBaseEnabled && rca.knowledgeBase != nil {
-		match, id, recs := rca.knowledgeBase.FindMatch(anomaly, correlations)
+		match, id, recs, entries := rca.knowledgeBase.FindMatchWithEntries(anomaly, correlations)
 		if match {
 			knowledgeBaseMatch = true
 			knowledgeBaseID = id
 			recommendations = recs
+			knowledgeMatches = entries
 			rca.logger.Info("Found knowledge base match",
 				zap.String("anomaly", anomalyID),
 				zap.String("knowledge_base_id", knowledgeBaseID))
@@ -105,11 +176,25 @@ func (rca *RootCauseAnalysisEngine) AnalyzeAnomaly(ctx context.Context, anomaly 
 
 	if !knowledgeBaseMatch || rca.config.UseLLM {
 		if rca.llmClient != nil {
-			llmResult, err := rca.performLLMAnalysis(ctx, anomaly, correlations, allMetrics)
+			llmResult, err := rca.performEnhancedLLMAnalysis(ctx, anomaly, correlations, knowledgeMatches, allMetrics, historicalData)
 			if err != nil {
-				rca.logger.Warn("Failed to perform LLM analysis",
+				rca.logger.Warn("Failed to perform enhanced LLM analysis, falling back to basic analysis",
 					zap.String("anomaly", anomalyID),
 					zap.Error(err))
+				
+				basicResult, err := rca.performLLMAnalysis(ctx, anomaly, correlations, allMetrics)
+				if err != nil {
+					rca.logger.Warn("Failed to perform basic LLM analysis",
+						zap.String("anomaly", anomalyID),
+						zap.Error(err))
+				} else {
+					description = basicResult.Description
+					confidence = basicResult.Confidence
+					
+					if len(recommendations) == 0 {
+						recommendations = basicResult.Recommendations
+					}
+				}
 			} else {
 				description = llmResult.Description
 				confidence = llmResult.Confidence
@@ -148,6 +233,158 @@ func (rca *RootCauseAnalysisEngine) AnalyzeAnomaly(ctx context.Context, anomaly 
 	return rootCause, nil
 }
 
+func (rca *RootCauseAnalysisEngine) analyzeWithCorrelationsAndCausality(
+	ctx context.Context,
+	anomaly models.Anomaly,
+	correlations []MetricCorrelation,
+	causalRelationships []CausalRelationship,
+	allMetrics []metrics.Metric,
+	historicalData map[string]*metrics.TimeSeriesMetric,
+) (*models.RootCause, error) {
+	anomalyID := fmt.Sprintf("%s-%d", anomaly.MetricName, anomaly.Timestamp.Unix())
+	
+	relatedMetricsMap := make(map[string]bool)
+	
+	for i, corr := range correlations {
+		if i >= 5 {
+			break // Limit to top 5 correlations
+		}
+		relatedMetricsMap[corr.TargetMetric] = true
+	}
+	
+	for _, causal := range causalRelationships {
+		if causal.EffectMetric == anomaly.MetricName {
+			relatedMetricsMap[causal.CauseMetric] = true
+		}
+	}
+	
+	relatedMetrics := make([]string, 0, len(relatedMetricsMap))
+	for metric := range relatedMetricsMap {
+		relatedMetrics = append(relatedMetrics, metric)
+	}
+	
+	if len(relatedMetrics) > 5 {
+		relatedMetrics = relatedMetrics[:5]
+	}
+
+	var knowledgeBaseMatch bool
+	var knowledgeBaseID string
+	var recommendations []string
+	var knowledgeMatches []KnowledgeEntry
+
+	if rca.config.KnowledgeBaseEnabled && rca.knowledgeBase != nil {
+		match, id, recs, entries := rca.knowledgeBase.FindMatchWithEntries(anomaly, correlations)
+		if match {
+			knowledgeBaseMatch = true
+			knowledgeBaseID = id
+			recommendations = recs
+			knowledgeMatches = entries
+			rca.logger.Info("Found knowledge base match",
+				zap.String("anomaly", anomalyID),
+				zap.String("knowledge_base_id", knowledgeBaseID))
+		}
+	}
+
+	similarAnomalies := rca.findSimilarHistoricalAnomalies(anomaly)
+
+	var description string
+	var confidence float64
+
+	if rca.llmClient != nil {
+		llmResult, err := rca.performEnhancedLLMAnalysis(
+			ctx, 
+			anomaly, 
+			correlations, 
+			knowledgeMatches, 
+			allMetrics, 
+			historicalData,
+		)
+		
+		if err != nil {
+			rca.logger.Warn("Failed to perform enhanced LLM analysis",
+				zap.String("anomaly", anomalyID),
+				zap.Error(err))
+		} else {
+			description = llmResult.Description
+			confidence = llmResult.Confidence
+			
+			if len(recommendations) == 0 {
+				recommendations = llmResult.Recommendations
+			}
+		}
+	}
+
+	if description == "" {
+		if knowledgeBaseMatch {
+			description = fmt.Sprintf("Based on knowledge base match: %s", knowledgeMatches[0].Description)
+			confidence = 0.7 // Higher confidence for knowledge base match
+		} else {
+			description = rca.generateBasicDescription(anomaly, correlations)
+			confidence = 0.5 // Medium confidence for basic description
+		}
+	}
+
+	// If we have causal relationships, enhance the description
+	if len(causalRelationships) > 0 {
+		for _, causal := range causalRelationships {
+			if causal.EffectMetric == anomaly.MetricName {
+				description = fmt.Sprintf("%s Likely caused by changes in %s (causal strength: %.2f).", 
+					description, causal.CauseMetric, causal.Strength)
+				break
+			}
+		}
+	}
+
+	// Limit recommendations
+	maxRecommendations := rca.config.MaxRecommendations
+	if maxRecommendations <= 0 {
+		maxRecommendations = 3
+	}
+	if len(recommendations) > maxRecommendations {
+		recommendations = recommendations[:maxRecommendations]
+	}
+
+	rootCause := &models.RootCause{
+		AnomalyID:          anomalyID,
+		Description:        description,
+		Confidence:         confidence,
+		RelatedMetrics:     relatedMetrics,
+		Recommendations:    recommendations,
+		KnowledgeBaseMatch: knowledgeBaseMatch,
+		KnowledgeBaseID:    knowledgeBaseID,
+		Timestamp:          time.Now(),
+	}
+
+	return rootCause, nil
+}
+
+func (rca *RootCauseAnalysisEngine) findSimilarHistoricalAnomalies(anomaly models.Anomaly) []models.Anomaly {
+	similar := make([]models.Anomaly, 0)
+	
+	for _, historical := range rca.historicalAnomalies {
+		if historical.MetricName == anomaly.MetricName && 
+		   historical.Timestamp.Equal(anomaly.Timestamp) {
+			continue
+		}
+		
+		if historical.MetricName == anomaly.MetricName || 
+		   (historical.MetricType == anomaly.MetricType && 
+		    math.Abs(historical.DeviationScore-anomaly.DeviationScore) < 1.0) {
+			similar = append(similar, historical)
+		}
+	}
+	
+	sort.Slice(similar, func(i, j int) bool {
+		return similar[i].Timestamp.After(similar[j].Timestamp)
+	})
+	
+	if len(similar) > 5 {
+		similar = similar[:5]
+	}
+	
+	return similar
+}
+
 func (rca *RootCauseAnalysisEngine) findCorrelatedMetrics(anomaly models.Anomaly, allMetrics []metrics.Metric, historicalData map[string]*metrics.TimeSeriesMetric) ([]MetricCorrelation, error) {
 	correlations := make([]MetricCorrelation, 0)
 
@@ -174,11 +411,105 @@ func (rca *RootCauseAnalysisEngine) findCorrelatedMetrics(anomaly models.Anomaly
 				TargetMetric: metric.Name,
 				Coefficient:  coefficient,
 				TimeOffset:   timeOffset,
+				Direction:    0, // No direction information in basic correlation
+				Method:       "pearson",
 			})
 		}
 	}
 
 	return correlations, nil
+}
+
+func (rca *RootCauseAnalysisEngine) inferCausalRelationships(correlations []MetricCorrelation, historicalData map[string]*metrics.TimeSeriesMetric) []CausalRelationship {
+	causalRelationships := make([]CausalRelationship, 0)
+	
+	metricGroups := make(map[string][]MetricCorrelation)
+	for _, corr := range correlations {
+		metricGroups[corr.SourceMetric] = append(metricGroups[corr.SourceMetric], corr)
+	}
+	
+	for sourceMetric, correlations := range metricGroups {
+		for _, corr := range correlations {
+			if corr.Method == "lagged" && corr.TimeOffset != 0 {
+				var causeMetric, effectMetric string
+				var timeDelay int
+				
+				if corr.TimeOffset > 0 {
+					causeMetric = corr.SourceMetric
+					effectMetric = corr.TargetMetric
+					timeDelay = corr.TimeOffset
+				} else {
+					causeMetric = corr.TargetMetric
+					effectMetric = corr.SourceMetric
+					timeDelay = -corr.TimeOffset
+				}
+				
+				directionType := "positive"
+				if corr.Coefficient < 0 {
+					directionType = "negative"
+				}
+				
+				strength := math.Abs(corr.Coefficient) * (1.0 - float64(timeDelay)/10.0)
+				if strength < 0.1 {
+					strength = 0.1
+				}
+				
+				confidence := strength
+				if corr.Method == "lagged" {
+					confidence *= 1.2 // Boost confidence for lagged correlations
+				}
+				if confidence > 1.0 {
+					confidence = 1.0
+				}
+				
+				causalRelationships = append(causalRelationships, CausalRelationship{
+					CauseMetric:   causeMetric,
+					EffectMetric:  effectMetric,
+					Strength:      strength,
+					Confidence:    confidence,
+					TimeDelay:     timeDelay,
+					DirectionType: directionType,
+				})
+			}
+		}
+		
+		for _, corr := range correlations {
+			if corr.Direction != 0 && math.Abs(corr.Coefficient) > 0.8 {
+				var causeMetric, effectMetric string
+				
+				if corr.Direction > 0 {
+					causeMetric = corr.SourceMetric
+					effectMetric = corr.TargetMetric
+				} else {
+					causeMetric = corr.TargetMetric
+					effectMetric = corr.SourceMetric
+				}
+				
+				directionType := "positive"
+				if corr.Coefficient < 0 {
+					directionType = "negative"
+				}
+				
+				strength := math.Abs(corr.Coefficient)
+				confidence := strength * 0.9 // Slightly lower confidence without time lag evidence
+				
+				causalRelationships = append(causalRelationships, CausalRelationship{
+					CauseMetric:   causeMetric,
+					EffectMetric:  effectMetric,
+					Strength:      strength,
+					Confidence:    confidence,
+					TimeDelay:     0,
+					DirectionType: directionType,
+				})
+			}
+		}
+	}
+	
+	sort.Slice(causalRelationships, func(i, j int) bool {
+		return causalRelationships[i].Confidence > causalRelationships[j].Confidence
+	})
+	
+	return causalRelationships
 }
 
 func (rca *RootCauseAnalysisEngine) calculateCorrelation(series1, series2 *metrics.TimeSeriesMetric) (float64, int) {
@@ -230,6 +561,14 @@ type LLMAnalysisResult struct {
 	Description     string
 	Confidence      float64
 	Recommendations []string
+}
+
+type LLMRootCauseResponse struct {
+	RootCause       string   `json:"root_cause"`
+	Explanation     string   `json:"explanation"`
+	Confidence      int      `json:"confidence"`
+	Recommendations []string `json:"recommendations"`
+	Impact          string   `json:"impact"`
 }
 
 func (rca *RootCauseAnalysisEngine) performLLMAnalysis(ctx context.Context, anomaly models.Anomaly, correlations []MetricCorrelation, allMetrics []metrics.Metric) (*LLMAnalysisResult, error) {
@@ -323,6 +662,136 @@ func (rca *RootCauseAnalysisEngine) performLLMAnalysis(ctx context.Context, anom
 		}
 	}
 
+	return result, nil
+}
+
+func (rca *RootCauseAnalysisEngine) performEnhancedLLMAnalysis(
+	ctx context.Context,
+	anomaly models.Anomaly,
+	correlations []MetricCorrelation,
+	knowledgeMatches []KnowledgeEntry,
+	allMetrics []metrics.Metric,
+	historicalData map[string]*metrics.TimeSeriesMetric,
+) (*LLMAnalysisResult, error) {
+	if rca.llmClient == nil {
+		return nil, fmt.Errorf("LLM client is not initialized")
+	}
+	
+	// Convert correlations to the format expected by the prompt generator
+	promptCorrelations := make([]analysis.CorrelationResult, len(correlations))
+	for i, corr := range correlations {
+		promptCorrelations[i] = analysis.CorrelationResult{
+			SourceMetric: corr.SourceMetric,
+			TargetMetric: corr.TargetMetric,
+			Coefficient:  corr.Coefficient,
+			Method:       corr.Method,
+			TimeOffset:   corr.TimeOffset,
+			Direction:    corr.Direction,
+		}
+	}
+	
+	similarAnomalies := rca.findSimilarHistoricalAnomalies(anomaly)
+	
+	prompt, err := llm.GenerateRootCauseAnalysisPrompt(
+		anomaly,
+		promptCorrelations,
+		knowledgeMatches,
+		similarAnomalies,
+	)
+	
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate enhanced prompt: %w", err)
+	}
+	
+	response, err := rca.llmClient.GenerateResponse(ctx, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate LLM response: %w", err)
+	}
+	
+	result := &LLMAnalysisResult{
+		Description:     "",
+		Confidence:      0.5, // Default confidence
+		Recommendations: make([]string, 0),
+	}
+	
+	var llmResponse LLMRootCauseResponse
+	
+	jsonContent := response.Content
+	
+	startIdx := strings.Index(jsonContent, "{")
+	endIdx := strings.LastIndex(jsonContent, "}")
+	
+	if startIdx >= 0 && endIdx > startIdx {
+		jsonContent = jsonContent[startIdx:endIdx+1]
+	}
+	
+	err = json.Unmarshal([]byte(jsonContent), &llmResponse)
+	if err == nil {
+		result.Description = llmResponse.RootCause
+		if llmResponse.Explanation != "" {
+			result.Description += ": " + llmResponse.Explanation
+		}
+		
+		// Convert confidence from 0-100 to 0-1
+		result.Confidence = float64(llmResponse.Confidence) / 100.0
+		if result.Confidence < 0 {
+			result.Confidence = 0
+		} else if result.Confidence > 1 {
+			result.Confidence = 1
+		}
+		
+		result.Recommendations = llmResponse.Recommendations
+	} else {
+		rca.logger.Warn("Failed to parse JSON response, falling back to text parsing",
+			zap.Error(err),
+			zap.String("response", response.Content))
+		
+		if rootCauseMatch := strings.Split(response.Content, "root cause:"); len(rootCauseMatch) > 1 {
+			description := strings.Split(rootCauseMatch[1], "confidence:")[0]
+			result.Description = strings.TrimSpace(description)
+		}
+		
+		if confidenceMatch := strings.Split(strings.ToLower(response.Content), "confidence:"); len(confidenceMatch) > 1 {
+			confidenceStr := strings.Split(confidenceMatch[1], "recommendations:")[0]
+			confidenceStr = strings.TrimSpace(confidenceStr)
+			
+			confidenceRegex := regexp.MustCompile(`(\d+)`)
+			matches := confidenceRegex.FindStringSubmatch(confidenceStr)
+			if len(matches) > 1 {
+				confidenceVal, err := strconv.Atoi(matches[1])
+				if err == nil {
+					if confidenceVal > 1 {
+						result.Confidence = float64(confidenceVal) / 100.0
+					} else {
+						result.Confidence = float64(confidenceVal)
+					}
+				}
+			}
+		}
+		
+		if recommendationsMatch := strings.Split(strings.ToLower(response.Content), "recommendations:"); len(recommendationsMatch) > 1 {
+			recommendationsText := recommendationsMatch[1]
+			lines := strings.Split(recommendationsText, "\n")
+			
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "1.") || strings.HasPrefix(line, "2.") || 
+				   strings.HasPrefix(line, "3.") || strings.HasPrefix(line, "4.") || 
+				   strings.HasPrefix(line, "5.") || strings.HasPrefix(line, "-") {
+					var recommendation string
+					if strings.HasPrefix(line, "-") {
+						recommendation = strings.TrimSpace(line[1:])
+					} else {
+						recommendation = strings.TrimSpace(line[2:])
+					}
+					if recommendation != "" {
+						result.Recommendations = append(result.Recommendations, recommendation)
+					}
+				}
+			}
+		}
+	}
+	
 	return result, nil
 }
 

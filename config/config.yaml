@@ -8,35 +8,63 @@ receivers:
 
 processors:
   ai_processor:
-    models:
-      error_classifier:
-        path: "./models/error-classifier.wasm"
-        memory_limit_mb: 100
-        timeout_ms: 50
-      importance_sampler:
-        path: "./models/importance-sampler.wasm"
-        memory_limit_mb: 80
-        timeout_ms: 30
-      entity_extractor:
-        path: "./models/entity-extractor.wasm"
-        memory_limit_mb: 150
-        timeout_ms: 50
-    processing:
-      batch_size: 50
-      concurrency: 4
-      queue_size: 1000
-      timeout_ms: 500
-    features:
-      error_classification: true
-      smart_sampling: true
-      entity_extraction: false
-    sampling:
-      error_events: 1.0
-      slow_spans: 1.0
-      normal_spans: 0.1
-      threshold_ms: 500
+    pmm:
+      enabled: true
+      base_url: "${PMM_BASE_URL}"
+      api_key: "${PMM_API_KEY}"
+      timeout: "30s"
+      retry_count: 3
+      max_retry_time: "60s"
+      cache_ttl: "5m"
+      cache_size: 100
+      query_interval: "1m"
+      metrics_queries:
+        mysql_query_latency: "avg_over_time(mysql_global_status_queries{instance=~\"$instance\"}[5m])"
+        mysql_connections: "mysql_global_status_threads_connected{instance=~\"$instance\"}"
+        mysql_errors: "mysql_global_status_connection_errors_total{instance=~\"$instance\"}"
+        mysql_buffer_pool_usage: "mysql_global_variables_innodb_buffer_pool_size{instance=~\"$instance\"}"
+    
+    anomaly_detection:
+      enabled: true
+      sensitivity_level: "medium"
+      baseline_window_hours: 24
+      anomaly_threshold: 2.5
+      min_data_points: 10
+      seasonality_period: 24
+      adaptive_baseline: true
+      adaptive_rate: 0.1
+    
+    llm:
+      enabled: true
+      provider: "gemini"
+      api_key: "${GEMINI_API_KEY}"
+      model: "gemini-pro"
+      max_tokens: 1024
+      temperature: 0.7
+      cache_enabled: true
+      cache_ttl: "1h"
+      cache_size: 100
+      enhanced_prompting: true
+      confidence_threshold: 0.7
+    
+    root_cause_analysis:
+      enabled: true
+      correlation_threshold: 0.7
+      max_causal_depth: 3
+      knowledge_base_enabled: true
+      knowledge_base_path: "config/knowledge_base.json"
+      custom_knowledge_base_path: "${CUSTOM_KB_PATH}"
+      use_llm: true
+      max_recommendations: 5
+      correlation_enabled: true
+      correlation_methods: ["pearson", "spearman"]
+      min_correlation: 0.7
+      lag_window: 5
+      causal_inference_enabled: true
+      confidence_scoring: true
+    
     output:
-      attribute_namespace: "ai."
+      attribute_namespace: "idop."
       include_confidence_scores: true
       max_attribute_length: 256
 

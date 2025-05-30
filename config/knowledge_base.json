@@ -1,0 +1,131 @@
+[
+  {
+    "id": "KB-001",
+    "title": "High MySQL Query Latency",
+    "description": "Abnormally high query latency often indicates query performance issues, excessive load, or resource constraints.",
+    "metric_patterns": ["mysql_query_latency.*"],
+    "value_patterns": [
+      {
+        "type": "above",
+        "value": 100,
+        "unit": "ms"
+      }
+    ],
+    "correlation_patterns": [
+      {
+        "source_metric_pattern": "mysql_query_latency.*",
+        "target_metric_pattern": "mysql_buffer_pool_usage",
+        "coefficient_min": 0.7
+      }
+    ],
+    "recommendations": [
+      "Optimize slow queries by adding appropriate indexes",
+      "Increase InnoDB buffer pool size if memory allows",
+      "Check for table locks or long-running transactions"
+    ],
+    "tags": ["mysql", "performance", "latency"],
+    "severity": "medium",
+    "references": ["https://dev.mysql.com/doc/refman/8.0/en/optimization.html"]
+  },
+  {
+    "id": "KB-002",
+    "title": "MySQL Connection Saturation",
+    "description": "Too many connections can exhaust server resources and lead to connection failures.",
+    "metric_patterns": ["mysql_connections"],
+    "value_patterns": [
+      {
+        "type": "above",
+        "value": 80,
+        "unit": "percent"
+      }
+    ],
+    "correlation_patterns": [
+      {
+        "source_metric_pattern": "mysql_connections",
+        "target_metric_pattern": "mysql_aborted_connections",
+        "coefficient_min": 0.5
+      }
+    ],
+    "recommendations": [
+      "Increase max_connections parameter if resources allow",
+      "Implement connection pooling in application",
+      "Optimize queries to reduce connection duration",
+      "Check for connection leaks in application code"
+    ],
+    "tags": ["mysql", "connections", "saturation"],
+    "severity": "high",
+    "references": ["https://dev.mysql.com/doc/refman/8.0/en/too-many-connections.html"]
+  },
+  {
+    "id": "KB-003",
+    "title": "High MySQL Error Rate",
+    "description": "Elevated error rates may indicate application bugs, configuration issues, or resource constraints.",
+    "metric_patterns": ["mysql_error_rate"],
+    "value_patterns": [
+      {
+        "type": "above",
+        "value": 1,
+        "unit": "percent"
+      }
+    ],
+    "recommendations": [
+      "Check MySQL error log for specific error messages",
+      "Verify application SQL syntax and parameter binding",
+      "Ensure proper error handling in application code"
+    ],
+    "tags": ["mysql", "errors", "reliability"],
+    "severity": "high",
+    "references": ["https://dev.mysql.com/doc/refman/8.0/en/error-log.html"]
+  },
+  {
+    "id": "KB-004",
+    "title": "MySQL Disk I/O Saturation",
+    "description": "High disk I/O utilization can cause performance degradation across all database operations.",
+    "metric_patterns": ["mysql_disk_io_utilization"],
+    "value_patterns": [
+      {
+        "type": "above",
+        "value": 80,
+        "unit": "percent"
+      }
+    ],
+    "correlation_patterns": [
+      {
+        "source_metric_pattern": "mysql_disk_io_utilization",
+        "target_metric_pattern": "mysql_query_latency.*",
+        "coefficient_min": 0.6
+      }
+    ],
+    "recommendations": [
+      "Increase InnoDB buffer pool size to reduce disk reads",
+      "Consider using faster storage (SSD/NVMe)",
+      "Optimize queries to reduce disk operations",
+      "Check for unnecessary full table scans"
+    ],
+    "tags": ["mysql", "disk", "io", "performance"],
+    "severity": "medium",
+    "references": ["https://dev.mysql.com/doc/refman/8.0/en/optimizing-innodb-diskio.html"]
+  },
+  {
+    "id": "KB-005",
+    "title": "MySQL Memory Pressure",
+    "description": "High memory usage can lead to swapping and severe performance degradation.",
+    "metric_patterns": ["mysql_memory_usage"],
+    "value_patterns": [
+      {
+        "type": "above",
+        "value": 85,
+        "unit": "percent"
+      }
+    ],
+    "recommendations": [
+      "Reduce InnoDB buffer pool size if causing system memory pressure",
+      "Optimize memory-intensive queries",
+      "Consider adding more RAM to the server",
+      "Check for memory leaks in custom functions or plugins"
+    ],
+    "tags": ["mysql", "memory", "performance"],
+    "severity": "high",
+    "references": ["https://dev.mysql.com/doc/refman/8.0/en/memory-use.html"]
+  }
+]

@@ -11,6 +11,8 @@ type LLMConfig struct {
 	CacheTTL string `mapstructure:"cache_ttl"`
 	CacheSize int `mapstructure:"cache_size"`
 	PromptTemplates map[string]string `mapstructure:"prompt_templates"`
+	EnhancedPrompting bool `mapstructure:"enhanced_prompting"`
+	ConfidenceThreshold float64 `mapstructure:"confidence_threshold"`
 }
 
 type AnomalyDetectionConfig struct {
@@ -30,8 +32,15 @@ type RootCauseAnalysisConfig struct {
 	MaxCausalDepth int `mapstructure:"max_causal_depth"`
 	KnowledgeBaseEnabled bool `mapstructure:"knowledge_base_enabled"`
 	KnowledgeBasePath string `mapstructure:"knowledge_base_path"`
+	CustomKnowledgeBasePath string `mapstructure:"custom_knowledge_base_path"`
 	UseLLM bool `mapstructure:"use_llm"`
 	MaxRecommendations int `mapstructure:"max_recommendations"`
+	CorrelationEnabled bool `mapstructure:"correlation_enabled"`
+	CorrelationMethods []string `mapstructure:"correlation_methods"`
+	MinCorrelation float64 `mapstructure:"min_correlation"`
+	LagWindow int `mapstructure:"lag_window"`
+	CausalInferenceEnabled bool `mapstructure:"causal_inference_enabled"`
+	ConfidenceScoring bool `mapstructure:"confidence_scoring"`
 }
 
 type PMMConfig struct {

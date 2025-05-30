@@ -24,6 +24,8 @@ type IDOPProcessor struct {
 	anomalyDetector  *analysis.AnomalyDetector
 	llmClient        *llm.Client
 	rcaEngine        *analysis.RootCauseAnalysisEngine
+	correlationAnalyzer *analysis.CorrelationAnalyzer
+	knowledgeBase    *analysis.KnowledgeBase
 	reportGenerator  *reporting.ReportGenerator
 	
 	metrics          map[string]metrics.Metric
@@ -121,6 +123,36 @@ func NewIDOPProcessor(logger *zap.Logger, config *Config) (*IDOPProcessor, error
 		}
 	}
 
+	var correlationAnalyzer *analysis.CorrelationAnalyzer
+	if config.RootCauseAnalysis.Enabled && config.RootCauseAnalysis.CorrelationEnabled {
+		correlationConfig := &analysis.CorrelationConfig{
+			Methods:        config.RootCauseAnalysis.CorrelationMethods,
+			MinCorrelation: config.RootCauseAnalysis.MinCorrelation,
+			LagWindow:      config.RootCauseAnalysis.LagWindow,
+			MinDataPoints:  config.AnomalyDetection.MinDataPoints,
+		}
+		correlationAnalyzer = analysis.NewCorrelationAnalyzer(correlationConfig, logger)
+		logger.Info("Initialized correlation analyzer", 
+			zap.Strings("methods", correlationConfig.Methods),
+			zap.Float64("min_correlation", correlationConfig.MinCorrelation),
+			zap.Int("lag_window", correlationConfig.LagWindow))
+	}
+	
+	var knowledgeBase *analysis.KnowledgeBase
+	if config.RootCauseAnalysis.Enabled && config.RootCauseAnalysis.KnowledgeBaseEnabled {
+		knowledgeBasePath := config.RootCauseAnalysis.KnowledgeBasePath
+		if config.RootCauseAnalysis.CustomKnowledgeBasePath != "" {
+			knowledgeBasePath = config.RootCauseAnalysis.CustomKnowledgeBasePath
+		}
+		
+		knowledgeBase, err = analysis.NewKnowledgeBase(knowledgeBasePath, logger)
+		if err != nil {
+			logger.Warn("Failed to initialize knowledge base, will use default entries",
+				zap.Error(err))
+			knowledgeBase, _ = analysis.NewKnowledgeBase("", logger) // Initialize with defaults
+		}
+	}
+	
 	var rcaEngine *analysis.RootCauseAnalysisEngine
 	if config.RootCauseAnalysis.Enabled {
 		rcaEngine, err = analysis.NewRootCauseAnalysisEngine(&config.RootCauseAnalysis, llmClient, logger)
@@ -133,19 +165,21 @@ func NewIDOPProcessor(logger *zap.Logger, config *Config) (*IDOPProcessor, error
 	reportGenerator := reporting.NewReportGenerator(logger)
 
 	return &IDOPProcessor{
-		logger:           logger,
-		config:           config,
-		pmmClient:        pmmClient,
-		metricsCollector: metricsCollector,
-		anomalyDetector:  anomalyDetector,
-		llmClient:        llmClient,
-		rcaEngine:        rcaEngine,
-		reportGenerator:  reportGenerator,
-		metrics:          make(map[string]metrics.Metric),
-		historicalData:   make(map[string]*metrics.TimeSeriesMetric),
-		anomalies:        make([]analysis.Anomaly, 0),
-		rootCauses:       make(map[string]analysis.RootCause),
-		stopChan:         make(chan struct{}),
+		logger:             logger,
+		config:             config,
+		pmmClient:          pmmClient,
+		metricsCollector:   metricsCollector,
+		anomalyDetector:    anomalyDetector,
+		llmClient:          llmClient,
+		rcaEngine:          rcaEngine,
+		correlationAnalyzer: correlationAnalyzer,
+		knowledgeBase:      knowledgeBase,
+		reportGenerator:    reportGenerator,
+		metrics:            make(map[string]metrics.Metric),
+		historicalData:     make(map[string]*metrics.TimeSeriesMetric),
+		anomalies:          make([]analysis.Anomaly, 0),
+		rootCauses:         make(map[string]analysis.RootCause),
+		stopChan:           make(chan struct{}),
 	}, nil
 }
 
@@ -262,6 +296,65 @@ func (p *IDOPProcessor) performRootCauseAnalysis(ctx context.Context, anomalies 
 	p.mutex.RUnlock()
 	
 	for _, anomaly := range anomalies {
+		var correlationResults []analysis.CorrelationResult
+		if p.correlationAnalyzer != nil && p.config.RootCauseAnalysis.CorrelationEnabled {
+			anomalyMetric := metrics.Metric{
+				Name:      anomaly.MetricName,
+				Type:      string(anomaly.MetricType),
+				Value:     anomaly.Value,
+				Timestamp: anomaly.Timestamp,
+				Labels:    anomaly.Labels,
+				Unit:      anomaly.Unit,
+			}
+			
+			timeSeriesData := make(map[string][]metrics.TimeSeriesPoint)
+			for name, series := range historicalData {
+				timeSeriesData[name] = series.Values
+			}
+			
+			results, err := p.correlationAnalyzer.AnalyzeCorrelations(anomalyMetric, allMetrics, timeSeriesData)
+			if err != nil {
+				p.logger.Warn("Failed to analyze correlations",
+					zap.String("anomaly", anomaly.MetricName),
+					zap.Error(err))
+			} else {
+				correlationResults = results
+				p.logger.Debug("Found correlations",
+					zap.String("anomaly", anomaly.MetricName),
+					zap.Int("count", len(results)))
+			}
+		}
+		
+		var knowledgeMatches []analysis.KnowledgeEntry
+		if p.knowledgeBase != nil && p.config.RootCauseAnalysis.KnowledgeBaseEnabled {
+			metricCorrelations := make([]analysis.MetricCorrelation, len(correlationResults))
+			for i, corr := range correlationResults {
+				metricCorrelations[i] = analysis.MetricCorrelation{
+					SourceMetric: corr.SourceMetric,
+					TargetMetric: corr.TargetMetric,
+					Coefficient:  corr.Coefficient,
+					Method:       corr.Method,
+					TimeOffset:   corr.TimeOffset,
+					Direction:    corr.Direction,
+				}
+			}
+			
+			matched, kbID, _ := p.knowledgeBase.FindMatch(anomaly, metricCorrelations)
+			if matched && kbID != "" {
+				entry, found := p.knowledgeBase.GetEntry(kbID)
+				if found {
+					knowledgeMatches = append(knowledgeMatches, entry)
+					p.logger.Debug("Found knowledge base match",
+						zap.String("anomaly", anomaly.MetricName),
+						zap.String("kb_id", kbID))
+				}
+			}
+			
+			if len(knowledgeMatches) == 0 && p.config.LLM.Enabled && p.config.LLM.EnhancedPrompting {
+				knowledgeMatches = p.knowledgeBase.GetAllEntries()
+			}
+		}
+		
 		rootCause, err := p.rcaEngine.AnalyzeAnomaly(ctx, anomaly, allMetrics, historicalData)
 		if err != nil {
 			p.logger.Error("Failed to analyze anomaly",
@@ -271,6 +364,33 @@ func (p *IDOPProcessor) performRootCauseAnalysis(ctx context.Context, anomalies 
 		}
 		
 		if rootCause != nil {
+			if len(knowledgeMatches) > 0 {
+				rootCause.KnowledgeBaseMatch = true
+				rootCause.KnowledgeBaseID = knowledgeMatches[0].ID
+			}
+			
+			if p.config.RootCauseAnalysis.ConfidenceScoring && p.llmClient != nil && 
+			   p.config.LLM.Enabled && p.config.LLM.EnhancedPrompting {
+				confidencePrompt, err := llm.GenerateConfidenceScoringPrompt(
+					anomaly,
+					*rootCause,
+					correlationResults,
+					knowledgeMatches,
+					[]models.Anomaly{}, // Historical anomalies would be added here
+				)
+				
+				if err == nil {
+					response, err := p.llmClient.GenerateResponse(ctx, confidencePrompt)
+					if err == nil {
+						confidenceStr := strings.TrimSpace(response.Content)
+						confidence, err := strconv.ParseFloat(confidenceStr, 64)
+						if err == nil && confidence >= 0 && confidence <= 100 {
+							rootCause.Confidence = confidence / 100.0
+						}
+					}
+				}
+			}
+			
 			p.mutex.Lock()
 			p.rootCauses[rootCause.AnomalyID] = *rootCause
 			p.mutex.Unlock()
@@ -278,7 +398,8 @@ func (p *IDOPProcessor) performRootCauseAnalysis(ctx context.Context, anomalies 
 			p.logger.Info("Identified root cause",
 				zap.String("anomaly", anomaly.MetricName),
 				zap.String("description", rootCause.Description),
-				zap.Float64("confidence", rootCause.Confidence))
+				zap.Float64("confidence", rootCause.Confidence),
+				zap.Bool("kb_match", rootCause.KnowledgeBaseMatch))
 		}
 	}
 }
