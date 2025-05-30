@@ -1,17 +1,20 @@
 package reporting
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/fortxun/idop/pkg/llm"
 	"github.com/fortxun/idop/pkg/types/models"
 	"go.uber.org/zap"
 )
 
 type ReportGenerator struct {
-	logger *zap.Logger
+	logger     *zap.Logger
+	llmManager *llm.LLMManager
 }
 
 type Report struct {
@@ -24,9 +27,10 @@ type Report struct {
 	OverallSeverity  string           `json:"overall_severity"`
 }
 
-func NewReportGenerator(logger *zap.Logger) *ReportGenerator {
+func NewReportGenerator(logger *zap.Logger, llmManager *llm.LLMManager) *ReportGenerator {
 	return &ReportGenerator{
-		logger: logger,
+		logger:     logger,
+		llmManager: llmManager,
 	}
 }
 
@@ -81,6 +85,22 @@ func (rg *ReportGenerator) GenerateReport(anomalies []models.Anomaly, rootCauses
 }
 
 func (rg *ReportGenerator) generateSummary(anomalies []models.Anomaly, rootCauses []models.RootCause, severity string) string {
+	if rg.llmManager != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		
+		llmSummary, err := rg.llmManager.GenerateSummary(ctx, anomalies, rootCauses)
+		if err == nil && llmSummary != "" {
+			rg.logger.Debug("Generated summary using LLM")
+			return llmSummary
+		}
+		
+		if err != nil {
+			rg.logger.Warn("Failed to generate summary using LLM, falling back to template",
+				zap.Error(err))
+		}
+	}
+	
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("Database Observability Report (%s severity)\n\n", severity))
@@ -136,6 +156,23 @@ func (rg *ReportGenerator) generateSummary(anomalies []models.Anomaly, rootCause
 }
 
 func (rg *ReportGenerator) generateGenericRecommendations(anomalies []models.Anomaly) []string {
+	// If LLM is available, use it to generate more intelligent recommendations
+	if rg.llmManager != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		
+		llmRecommendations, err := rg.llmManager.GenerateRecommendations(ctx, anomalies, nil)
+		if err == nil && len(llmRecommendations) > 0 {
+			rg.logger.Debug("Generated recommendations using LLM")
+			return llmRecommendations
+		}
+		
+		if err != nil {
+			rg.logger.Warn("Failed to generate recommendations using LLM, falling back to template",
+				zap.Error(err))
+		}
+	}
+	
 	recommendations := make([]string, 0)
 	recommendationSet := make(map[string]bool)
 

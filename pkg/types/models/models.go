@@ -35,10 +35,12 @@ type Anomaly struct {
 }
 
 type RootCause struct {
-	Description    string   `json:"description"`
-	Confidence     float64  `json:"confidence"`
-	RelatedMetrics []string `json:"related_metrics"`
+	Description     string   `json:"description"`
+	Confidence      float64  `json:"confidence"`
+	RelatedMetrics  []string `json:"related_metrics"`
 	Recommendations []string `json:"recommendations"`
+	LLMGenerated    bool     `json:"llm_generated"`
+	Reasoning       string   `json:"reasoning"`
 }
 
 type Alert struct {

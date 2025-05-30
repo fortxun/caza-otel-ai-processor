@@ -3,12 +3,20 @@ package analysis
 import (
 	"context"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/fortxun/idop/pkg/types/config"
 	"github.com/fortxun/idop/pkg/types/models"
 	"go.uber.org/zap"
+)
+
+type StatisticalMethod string
+
+const (
+	MethodZScore StatisticalMethod = "zscore"
+	MethodMAD    StatisticalMethod = "mad"
 )
 
 type AnomalyDetector struct {
@@ -21,11 +29,15 @@ type AnomalyDetector struct {
 type Baseline struct {
 	Mean          float64
 	StdDev        float64
+	Median        float64
+	MAD           float64
 	Min           float64
 	Max           float64
 	LastUpdated   time.Time
 	DataPoints    int
 	Values        []float64
+	DailyPattern  map[int]float64
+	WeeklyPattern map[int]float64
 }
 
 func NewAnomalyDetector(config *config.AnalysisConfig, logger *zap.Logger) *AnomalyDetector {
@@ -57,7 +69,7 @@ func (ad *AnomalyDetector) DetectAnomalies(ctx context.Context, metrics []models
 		}
 
 		if ad.config.AdaptiveBaseline {
-			ad.updateBaseline(metric.Name, metric.Value)
+			ad.updateBaseline(metric.Name, metric.Value, metric.Timestamp)
 		}
 
 		if baseline.DataPoints < ad.config.MinDataPoints {
@@ -68,17 +80,40 @@ func (ad *AnomalyDetector) DetectAnomalies(ctx context.Context, metrics []models
 			continue
 		}
 
-		deviation := (metric.Value - baseline.Mean) / baseline.StdDev
-		if math.IsNaN(deviation) || math.IsInf(deviation, 0) {
-			if baseline.StdDev < 0.0001 {
-				deviation = math.Abs(metric.Value - baseline.Mean)
-			} else {
-				continue
-			}
+		var adjustedValue float64
+		if ad.config.SeasonalityAdjust {
+			adjustedValue = ad.applySeasonalityAdjustment(metric.Value, metric.Timestamp, baseline)
+		} else {
+			adjustedValue = metric.Value
 		}
 
-		threshold := ad.getThresholdForMetricType(metric.Type)
-		if math.Abs(deviation) > threshold {
+		var deviation float64
+		var anomalyDetected bool
+		detectionMethod := ad.getDetectionMethod(baseline)
+
+		if detectionMethod == MethodZScore {
+			deviation = (adjustedValue - baseline.Mean) / baseline.StdDev
+			if math.IsNaN(deviation) || math.IsInf(deviation, 0) {
+				if baseline.StdDev < 0.0001 {
+					deviation = math.Abs(adjustedValue - baseline.Mean)
+				} else {
+					continue
+				}
+			}
+			
+			threshold := ad.getThresholdForMetricType(metric.Type)
+			anomalyDetected = math.Abs(deviation) > threshold
+		} else {
+			deviation = math.Abs(adjustedValue - baseline.Median) / baseline.MAD
+			
+			madThreshold := ad.getThresholdForMetricType(metric.Type) * 0.6745
+			anomalyDetected = deviation > madThreshold
+			
+			deviation = deviation * 1.4826
+		}
+
+		if anomalyDetected {
+			threshold := ad.getThresholdForMetricType(metric.Type)
 			severity := ad.calculateSeverity(deviation, threshold)
 
 			anomaly := models.Anomaly{
@@ -98,9 +133,11 @@ func (ad *AnomalyDetector) DetectAnomalies(ctx context.Context, metrics []models
 			ad.logger.Info("Anomaly detected",
 				zap.String("metric", metric.Name),
 				zap.Float64("value", metric.Value),
+				zap.Float64("adjusted_value", adjustedValue),
 				zap.Float64("baseline", baseline.Mean),
 				zap.Float64("deviation", deviation),
-				zap.String("severity", severity))
+				zap.String("severity", severity),
+				zap.String("method", string(detectionMethod)))
 		}
 	}
 
@@ -117,13 +154,17 @@ func (ad *AnomalyDetector) getOrCreateBaseline(metricName string) (*Baseline, er
 	}
 
 	baseline = &Baseline{
-		Mean:        0,
-		StdDev:      0,
-		Min:         math.MaxFloat64,
-		Max:         -math.MaxFloat64,
-		LastUpdated: time.Now(),
-		DataPoints:  0,
-		Values:      make([]float64, 0, 100), // Store recent values for adaptive baseline
+		Mean:          0,
+		StdDev:        0,
+		Median:        0,
+		MAD:           0,
+		Min:           math.MaxFloat64,
+		Max:           -math.MaxFloat64,
+		LastUpdated:   time.Now(),
+		DataPoints:    0,
+		Values:        make([]float64, 0, 100), // Store recent values for adaptive baseline
+		DailyPattern:  make(map[int]float64),   // Hour of day (0-23)
+		WeeklyPattern: make(map[int]float64),   // Day of week (0-6)
 	}
 
 	ad.mutex.Lock()
@@ -133,7 +174,7 @@ func (ad *AnomalyDetector) getOrCreateBaseline(metricName string) (*Baseline, er
 	return baseline, nil
 }
 
-func (ad *AnomalyDetector) updateBaseline(metricName string, value float64) {
+func (ad *AnomalyDetector) updateBaseline(metricName string, value float64, timestamp time.Time) {
 	ad.mutex.Lock()
 	defer ad.mutex.Unlock()
 
@@ -159,6 +200,8 @@ func (ad *AnomalyDetector) updateBaseline(metricName string, value float64) {
 	if baseline.DataPoints == 1 {
 		baseline.Mean = value
 		baseline.StdDev = 0
+		baseline.Median = value
+		baseline.MAD = 0
 	} else {
 		adaptiveRate := ad.config.AdaptiveRate
 		if adaptiveRate <= 0 {
@@ -171,6 +214,56 @@ func (ad *AnomalyDetector) updateBaseline(metricName string, value float64) {
 		variance := baseline.StdDev * baseline.StdDev
 		variance = (1-adaptiveRate)*variance + adaptiveRate*math.Pow(value-baseline.Mean, 2)
 		baseline.StdDev = math.Sqrt(variance)
+
+		// Update median and MAD if we have enough data points
+		if len(baseline.Values) >= ad.config.MinDataPoints {
+			valuesCopy := make([]float64, len(baseline.Values))
+			copy(valuesCopy, baseline.Values)
+			sort.Float64s(valuesCopy)
+			
+			n := len(valuesCopy)
+			if n%2 == 0 {
+				baseline.Median = (valuesCopy[n/2-1] + valuesCopy[n/2]) / 2
+			} else {
+				baseline.Median = valuesCopy[n/2]
+			}
+			
+			deviations := make([]float64, n)
+			for i, v := range valuesCopy {
+				deviations[i] = math.Abs(v - baseline.Median)
+			}
+			sort.Float64s(deviations)
+			
+			if n%2 == 0 {
+				baseline.MAD = (deviations[n/2-1] + deviations[n/2]) / 2
+			} else {
+				baseline.MAD = deviations[n/2]
+			}
+			
+			if baseline.MAD < 0.0001 {
+				baseline.MAD = 0.0001
+			}
+		}
+	}
+
+	hourOfDay := timestamp.Hour()
+	dayOfWeek := int(timestamp.Weekday())
+	
+	adaptiveRate := ad.config.AdaptiveRate
+	if adaptiveRate <= 0 {
+		adaptiveRate = 0.1
+	}
+	
+	if oldValue, exists := baseline.DailyPattern[hourOfDay]; exists {
+		baseline.DailyPattern[hourOfDay] = oldValue + adaptiveRate*(value-oldValue)
+	} else {
+		baseline.DailyPattern[hourOfDay] = value
+	}
+	
+	if oldValue, exists := baseline.WeeklyPattern[dayOfWeek]; exists {
+		baseline.WeeklyPattern[dayOfWeek] = oldValue + adaptiveRate*(value-oldValue)
+	} else {
+		baseline.WeeklyPattern[dayOfWeek] = value
 	}
 
 	baseline.LastUpdated = time.Now()

@@ -5,6 +5,7 @@ type Config struct {
 	Analysis AnalysisConfig `yaml:"analysis"`
 	Alerting AlertingConfig `yaml:"alerting"`
 	Server   ServerConfig   `yaml:"server"`
+	LLM      LLMConfig      `yaml:"llm"`
 }
 
 type PMMConfig struct {
@@ -21,6 +22,8 @@ type AnalysisConfig struct {
 	MinDataPoints     int     `yaml:"min_data_points"`
 	AdaptiveBaseline  bool    `yaml:"adaptive_baseline"`
 	AdaptiveRate      float64 `yaml:"adaptive_rate"`
+	PreferredMethod   string  `yaml:"preferred_method"`
+	SeasonalityAdjust bool    `yaml:"seasonality_adjust"`
 }
 
 type AlertingConfig struct {

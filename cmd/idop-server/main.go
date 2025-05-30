@@ -12,6 +12,7 @@ import (
 
 	"github.com/fortxun/idop/pkg/alerting"
 	"github.com/fortxun/idop/pkg/analysis"
+	"github.com/fortxun/idop/pkg/llm"
 	"github.com/fortxun/idop/pkg/metrics"
 	"github.com/fortxun/idop/pkg/pmm"
 	"github.com/fortxun/idop/pkg/processor"
@@ -58,7 +59,19 @@ func main() {
 
 	detector := analysis.NewAnomalyDetector(&cfg.Analysis, logger)
 
-	reporter := reporting.NewReportGenerator(logger)
+	var llmManager *llm.LLMManager
+	if cfg.LLM.Enabled {
+		llmManager, err = llm.NewLLMManager(&cfg.LLM, logger)
+		if err != nil {
+			logger.Warn("Failed to initialize LLM manager, continuing without LLM integration",
+				zap.Error(err))
+		} else {
+			logger.Info("LLM integration initialized",
+				zap.String("provider", cfg.LLM.Provider))
+		}
+	}
+
+	reporter := reporting.NewReportGenerator(logger, llmManager)
 
 	notifier := alerting.NewNotifier(&cfg.Alerting, logger)
 
@@ -68,6 +81,7 @@ func main() {
 		detector,
 		reporter,
 		notifier,
+		llmManager,
 		logger,
 	)
 	if err != nil {
@@ -110,7 +124,16 @@ func loadConfig(path string) (*config.Config, error) {
 	v.SetDefault("analysis.min_data_points", 10)
 	v.SetDefault("analysis.adaptive_baseline", true)
 	v.SetDefault("analysis.adaptive_rate", 0.1)
+	v.SetDefault("analysis.preferred_method", "auto")
+	v.SetDefault("analysis.seasonality_adjust", true)
 	v.SetDefault("alerting.enabled", true)
+	v.SetDefault("llm.enabled", false)
+	v.SetDefault("llm.provider", "gemini")
+	v.SetDefault("llm.model", "gemini-pro")
+	v.SetDefault("llm.cache_enabled", true)
+	v.SetDefault("llm.cache_size", 100)
+	v.SetDefault("llm.cache_ttl", "1h")
+	v.SetDefault("llm.temperature", 0.7)
 
 	v.SetEnvPrefix("IDOP")
 	v.AutomaticEnv()

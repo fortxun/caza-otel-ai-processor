@@ -8,6 +8,7 @@ import (
 
 	"github.com/fortxun/idop/pkg/alerting"
 	"github.com/fortxun/idop/pkg/analysis"
+	"github.com/fortxun/idop/pkg/llm"
 	"github.com/fortxun/idop/pkg/metrics"
 	"github.com/fortxun/idop/pkg/reporting"
 	"github.com/fortxun/idop/pkg/types/config"
@@ -21,6 +22,7 @@ type IDOPProcessor struct {
 	detector    *analysis.AnomalyDetector
 	reporter    *reporting.ReportGenerator
 	notifier    *alerting.Notifier
+	llmManager  *llm.LLMManager
 	logger      *zap.Logger
 	stopCh      chan struct{}
 	wg          sync.WaitGroup
@@ -35,6 +37,7 @@ func NewIDOPProcessor(
 	detector *analysis.AnomalyDetector,
 	reporter *reporting.ReportGenerator,
 	notifier *alerting.Notifier,
+	llmManager *llm.LLMManager,
 	logger *zap.Logger,
 ) (*IDOPProcessor, error) {
 	if config == nil {
@@ -78,6 +81,7 @@ func NewIDOPProcessor(
 		detector:   detector,
 		reporter:   reporter,
 		notifier:   notifier,
+		llmManager: llmManager,
 		logger:     logger,
 		stopCh:     make(chan struct{}),
 		interval:   interval,
@@ -157,6 +161,34 @@ func (p *IDOPProcessor) ProcessMetrics(ctx context.Context) error {
 	}
 
 	rootCauses := make([]models.RootCause, 0)
+	
+	if p.llmManager != nil && p.config.LLM.Enabled && len(anomalies) > 0 {
+		contextData := llm.ContextData{
+			RelatedMetrics: metrics,
+			TimeRange: llm.TimeRange{
+				Start: time.Now().Add(-p.interval),
+				End:   time.Now(),
+			},
+			SystemInfo: make(map[string]string),
+		}
+		
+		contextData.SystemInfo["database_type"] = "MySQL" // This would come from actual system in production
+		contextData.SystemInfo["environment"] = "Production"
+		
+		llmRootCauses, err := p.llmManager.GenerateRCA(ctx, anomalies, contextData)
+		if err != nil {
+			p.logger.Warn("Failed to generate root causes using LLM",
+				zap.Error(err))
+		} else if len(llmRootCauses) > 0 {
+			p.logger.Info("Generated root causes using LLM",
+				zap.Int("count", len(llmRootCauses)))
+			rootCauses = llmRootCauses
+		}
+	}
+	
+	if len(rootCauses) == 0 {
+		p.logger.Debug("No root causes from LLM, using basic heuristics")
+	}
 
 	report := p.reporter.GenerateReport(anomalies, rootCauses)
 
