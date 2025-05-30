@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/fortxun/caza-otel-ai-processor/pkg/types/config"
