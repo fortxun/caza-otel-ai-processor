@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/fortxun/caza-otel-ai-processor/pkg/types/models"
 	"go.uber.org/zap"
 )
 
@@ -247,7 +248,7 @@ func (kb *KnowledgeBase) InitializeDefault() {
 		zap.Int("entries", len(kb.entries)))
 }
 
-func (kb *KnowledgeBase) FindMatch(anomaly Anomaly, correlations []MetricCorrelation) (bool, string, []string) {
+func (kb *KnowledgeBase) FindMatch(anomaly models.Anomaly, correlations []MetricCorrelation) (bool, string, []string) {
 	kb.mutex.RLock()
 	defer kb.mutex.RUnlock()
 
