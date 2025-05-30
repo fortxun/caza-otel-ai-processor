@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fortxun/caza-otel-ai-processor/pkg/analysis"
 	"github.com/fortxun/caza-otel-ai-processor/pkg/metrics"
+	"github.com/fortxun/caza-otel-ai-processor/pkg/types/models"
 	"go.uber.org/zap"
 )
 
@@ -18,8 +18,8 @@ type ReportGenerator struct {
 type Report struct {
 	ID string `json:"id"`
 	Timestamp time.Time `json:"timestamp"`
-	Anomalies []analysis.Anomaly `json:"anomalies"`
-	RootCauses []analysis.RootCause `json:"root_causes"`
+	Anomalies []models.Anomaly `json:"anomalies"`
+	RootCauses []models.RootCause `json:"root_causes"`
 	Metrics []metrics.Metric `json:"metrics"`
 	Summary string `json:"summary"`
 	Recommendations []string `json:"recommendations"`
@@ -32,7 +32,7 @@ func NewReportGenerator(logger *zap.Logger) *ReportGenerator {
 	}
 }
 
-func (rg *ReportGenerator) GenerateReport(anomalies []analysis.Anomaly, rootCauses []analysis.RootCause, relevantMetrics []metrics.Metric) *Report {
+func (rg *ReportGenerator) GenerateReport(anomalies []models.Anomaly, rootCauses []models.RootCause, relevantMetrics []metrics.Metric) *Report {
 	reportID := fmt.Sprintf("IDOP-REPORT-%d", time.Now().Unix())
 
 	overallSeverity := "low"
@@ -79,7 +79,7 @@ func (rg *ReportGenerator) GenerateReport(anomalies []analysis.Anomaly, rootCaus
 	return report
 }
 
-func (rg *ReportGenerator) generateSummary(anomalies []analysis.Anomaly, rootCauses []analysis.RootCause, severity string) string {
+func (rg *ReportGenerator) generateSummary(anomalies []models.Anomaly, rootCauses []models.RootCause, severity string) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("Database Observability Report (%s severity)\n\n", severity))
