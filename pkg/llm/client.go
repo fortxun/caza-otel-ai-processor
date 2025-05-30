@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fortxun/caza-otel-ai-processor/pkg/processor"
+	"github.com/fortxun/caza-otel-ai-processor/pkg/types/config"
 	"go.uber.org/zap"
 )
 
 type Client struct {
-	config     *processor.LLMConfig
+	config     *config.LLMConfig
 	logger     *zap.Logger
 	httpClient *http.Client
 	cache      *ResponseCache
@@ -29,7 +29,7 @@ type Response struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-func NewClient(config *processor.LLMConfig, logger *zap.Logger) (*Client, error) {
+func NewClient(config *config.LLMConfig, logger *zap.Logger) (*Client, error) {
 	if !config.Enabled {
 		return nil, fmt.Errorf("LLM integration is not enabled")
 	}
