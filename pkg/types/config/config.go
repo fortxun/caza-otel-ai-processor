@@ -1,9 +1,5 @@
 package config
 
-import (
-	"time"
-)
-
 type Config struct {
 	PMM      PMMConfig      `yaml:"pmm"`
 	Analysis AnalysisConfig `yaml:"analysis"`

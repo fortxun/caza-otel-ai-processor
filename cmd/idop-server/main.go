@@ -86,7 +86,7 @@ func main() {
 	<-sigCh
 	logger.Info("Received shutdown signal")
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	_, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
 	if err := proc.Stop(); err != nil {
