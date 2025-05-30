@@ -10,6 +10,7 @@ A lightweight, CPU-only AI processor for OpenTelemetry that enhances telemetry d
 - **WASM Model Integration**: Efficient, isolated execution of AI models with low resource footprint
 - **Parallel Processing**: Concurrent telemetry processing for high throughput
 - **Result Caching**: Optimized performance through caching of model results
+- **Intelligent Database Observability (IDOP)**: Advanced database monitoring with PMM integration, anomaly detection, and root cause analysis
 
 ## Benefits
 
@@ -18,6 +19,9 @@ A lightweight, CPU-only AI processor for OpenTelemetry that enhances telemetry d
 - Enhance signal-to-noise ratio in telemetry data
 - No changes required to application instrumentation
 - Minimal CPU and memory footprint
+- Proactive database issue detection with automated root cause analysis
+- Intelligent anomaly detection with adaptive baselines
+- Integration with Percona PMM for comprehensive database monitoring
 
 ## System Requirements
 
@@ -167,6 +171,23 @@ processors:
       slow_spans: 1.0    # Keep all slow spans
       normal_spans: 0.1  # Keep 10% of normal spans
       threshold_ms: 500  # Slow span threshold
+      
+    # IDOP Configuration (Intelligent Database Observability)
+    pmm:
+      enabled: true
+      base_url: "http://localhost:80/api/"
+      api_key: "${PMM_API_KEY}"
+      timeout: "30s"
+      metrics_queries:
+        mysql_queries_per_second: "rate(mysql_global_status_questions[5m])"
+        mysql_query_latency_avg: "avg_over_time(mysql_global_status_query_response_time_seconds_sum[5m]) / avg_over_time(mysql_global_status_query_response_time_seconds_count[5m])"
+        
+    # Anomaly Detection Configuration
+    anomaly_detection:
+      enabled: true
+      sensitivity_level: "medium"
+      baseline_window_hours: 24
+      anomaly_threshold: 2.5
 
 service:
   pipelines:
@@ -194,7 +215,12 @@ For detailed configuration options, see the [Configuration Guide](./docs/configu
 ├── pkg/
 │   ├── processor/        # OpenTelemetry processor implementation
 │   ├── runtime/          # WASM runtime integration
-│   └── config/           # Configuration handling
+│   ├── config/           # Configuration handling
+│   ├── pmm/              # Percona PMM integration
+│   ├── metrics/          # Metrics collection and processing
+│   ├── analysis/         # Anomaly detection and root cause analysis
+│   ├── llm/              # LLM integration for intelligent analysis
+│   └── reporting/        # Report generation and formatting
 ├── models/               # Pre-built WASM models
 ├── wasm-models/          # WASM model source code
 │   ├── error-classifier/ # Error classifier model
@@ -203,6 +229,19 @@ For detailed configuration options, see the [Configuration Guide](./docs/configu
 ├── config/               # Configuration examples
 └── docs/                 # Documentation
 ```
+
+## IDOP (Intelligent Database Observability Processor)
+
+The IDOP component extends the AI processor with advanced database monitoring capabilities:
+
+- **PMM Integration**: Connects to Percona Monitoring and Management (PMM) to collect database metrics
+- **Anomaly Detection**: Identifies abnormal patterns in database metrics using statistical analysis
+- **Root Cause Analysis**: Determines the likely causes of detected anomalies
+- **LLM Integration**: Uses large language models to provide intelligent analysis and recommendations
+- **Knowledge Base**: Maintains a repository of known database issues and solutions
+- **Comprehensive Reporting**: Generates detailed reports with actionable recommendations
+
+For IDOP-specific configuration, see the [IDOP Configuration Example](./config/idop-config.yaml).
 
 ## License
 

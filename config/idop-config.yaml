@@ -1,0 +1,121 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:14317
+      http:
+        endpoint: 0.0.0.0:14318
+
+processors:
+  ai_processor:
+    models:
+      error_classifier:
+        path: "./models/error-classifier.wasm"
+        memory_limit_mb: 100
+        timeout_ms: 50
+      importance_sampler:
+        path: "./models/importance-sampler.wasm"
+        memory_limit_mb: 80
+        timeout_ms: 30
+      entity_extractor:
+        path: "./models/entity-extractor.wasm"
+        memory_limit_mb: 150
+        timeout_ms: 50
+    processing:
+      batch_size: 50
+      concurrency: 4
+      queue_size: 1000
+      timeout_ms: 500
+      enable_parallel_processing: true
+      max_parallel_workers: 8
+    features:
+      error_classification: true
+      smart_sampling: true
+      entity_extraction: false
+    sampling:
+      error_events: 1.0
+      slow_spans: 1.0
+      normal_spans: 0.1
+      threshold_ms: 500
+    output:
+      attribute_namespace: "ai."
+      include_confidence_scores: true
+      max_attribute_length: 256
+    
+    pmm:
+      enabled: true
+      base_url: "http://localhost:80/api/"
+      api_key: "${PMM_API_KEY}"
+      timeout: "30s"
+      retry_count: 3
+      max_retry_time: "30s"
+      cache_ttl: "5m"
+      cache_size: 1000
+      query_interval: "1m"
+      metrics_queries:
+        mysql_queries_per_second: "rate(mysql_global_status_questions[5m])"
+        mysql_query_latency_avg: "avg_over_time(mysql_global_status_query_response_time_seconds_sum[5m]) / avg_over_time(mysql_global_status_query_response_time_seconds_count[5m])"
+        mysql_connections: "mysql_global_status_threads_connected / mysql_global_variables_max_connections * 100"
+        mysql_buffer_pool_usage: "mysql_global_status_innodb_buffer_pool_pages_data / mysql_global_status_innodb_buffer_pool_pages_total * 100"
+        mysql_disk_io_utilization: "rate(mysql_global_status_innodb_data_reads[5m]) + rate(mysql_global_status_innodb_data_writes[5m])"
+        mysql_error_rate: "rate(mysql_global_status_queries_errors[5m]) / rate(mysql_global_status_questions[5m]) * 100"
+    
+    llm:
+      enabled: true
+      provider: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      model: "gpt-4"
+      max_tokens: 1024
+      temperature: 0.2
+      cache_enabled: true
+      cache_ttl: "24h"
+      cache_size: 1000
+      prompt_templates:
+        root_cause_analysis: "Analyze the following database metrics anomaly and determine the most likely root cause:\n\n{anomaly_data}\n\nCorrelated metrics:\n{correlated_metrics}\n\nProvide a technical explanation of the root cause and recommend solutions."
+    
+    anomaly_detection:
+      enabled: true
+      sensitivity_level: "medium"
+      baseline_window_hours: 24
+      anomaly_threshold: 2.5
+      min_data_points: 10
+      seasonality_period: 24
+      adaptive_baseline: true
+      adaptive_rate: 0.1
+    
+    root_cause_analysis:
+      enabled: true
+      correlation_threshold: 0.7
+      max_causal_depth: 3
+      knowledge_base_enabled: true
+      knowledge_base_path: "./data/knowledge_base.json"
+      use_llm: true
+      max_recommendations: 3
+
+exporters:
+  otlp:
+    endpoint: "localhost:4319"
+    tls:
+      insecure: true
+
+service:
+  telemetry:
+    logs:
+      level: debug
+      development: true
+      output_paths: ["stdout", "./processor.log"]
+    metrics:
+      address: 0.0.0.0:18888  # Custom Prometheus metrics port
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [ai_processor]
+      exporters: [otlp]
+    metrics:
+      receivers: [otlp]
+      processors: [ai_processor]
+      exporters: [otlp]
+    logs:
+      receivers: [otlp]
+      processors: [ai_processor]
+      exporters: [otlp]
