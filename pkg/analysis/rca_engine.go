@@ -6,30 +6,21 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"strconv"
 	"time"
 
 	"github.com/fortxun/caza-otel-ai-processor/pkg/llm"
 	"github.com/fortxun/caza-otel-ai-processor/pkg/metrics"
-	"github.com/fortxun/caza-otel-ai-processor/pkg/processor"
+	"github.com/fortxun/caza-otel-ai-processor/pkg/types/config"
+	"github.com/fortxun/caza-otel-ai-processor/pkg/types/models"
 	"go.uber.org/zap"
 )
 
 type RootCauseAnalysisEngine struct {
 	logger       *zap.Logger
-	config       *processor.RootCauseAnalysisConfig
+	config       *config.RootCauseAnalysisConfig
 	llmClient    *llm.Client
 	knowledgeBase *KnowledgeBase
-}
-
-type RootCause struct {
-	AnomalyID string `json:"anomaly_id"`
-	Description string `json:"description"`
-	Confidence float64 `json:"confidence"`
-	RelatedMetrics []string `json:"related_metrics"`
-	Recommendations []string `json:"recommendations"`
-	KnowledgeBaseMatch bool `json:"knowledge_base_match"`
-	KnowledgeBaseID string `json:"knowledge_base_id,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
 }
 
 type MetricCorrelation struct {
@@ -39,7 +30,7 @@ type MetricCorrelation struct {
 	TimeOffset int `json:"time_offset"`
 }
 
-func NewRootCauseAnalysisEngine(config *processor.RootCauseAnalysisConfig, llmClient *llm.Client, logger *zap.Logger) (*RootCauseAnalysisEngine, error) {
+func NewRootCauseAnalysisEngine(config *config.RootCauseAnalysisConfig, llmClient *llm.Client, logger *zap.Logger) (*RootCauseAnalysisEngine, error) {
 	if !config.Enabled {
 		return nil, fmt.Errorf("root cause analysis is not enabled")
 	}
@@ -62,7 +53,7 @@ func NewRootCauseAnalysisEngine(config *processor.RootCauseAnalysisConfig, llmCl
 	}, nil
 }
 
-func (rca *RootCauseAnalysisEngine) AnalyzeAnomaly(ctx context.Context, anomaly Anomaly, allMetrics []metrics.Metric, historicalData map[string]*metrics.TimeSeriesMetric) (*RootCause, error) {
+func (rca *RootCauseAnalysisEngine) AnalyzeAnomaly(ctx context.Context, anomaly models.Anomaly, allMetrics []metrics.Metric, historicalData map[string]*metrics.TimeSeriesMetric) (*models.RootCause, error) {
 	if !rca.config.Enabled {
 		return nil, nil
 	}
@@ -143,7 +134,7 @@ func (rca *RootCauseAnalysisEngine) AnalyzeAnomaly(ctx context.Context, anomaly 
 		recommendations = recommendations[:maxRecommendations]
 	}
 
-	rootCause := &RootCause{
+	rootCause := &models.RootCause{
 		AnomalyID:          anomalyID,
 		Description:        description,
 		Confidence:         confidence,
@@ -157,7 +148,7 @@ func (rca *RootCauseAnalysisEngine) AnalyzeAnomaly(ctx context.Context, anomaly 
 	return rootCause, nil
 }
 
-func (rca *RootCauseAnalysisEngine) findCorrelatedMetrics(anomaly Anomaly, allMetrics []metrics.Metric, historicalData map[string]*metrics.TimeSeriesMetric) ([]MetricCorrelation, error) {
+func (rca *RootCauseAnalysisEngine) findCorrelatedMetrics(anomaly models.Anomaly, allMetrics []metrics.Metric, historicalData map[string]*metrics.TimeSeriesMetric) ([]MetricCorrelation, error) {
 	correlations := make([]MetricCorrelation, 0)
 
 	anomalyHistory, ok := historicalData[anomaly.MetricName]
@@ -241,7 +232,7 @@ type LLMAnalysisResult struct {
 	Recommendations []string
 }
 
-func (rca *RootCauseAnalysisEngine) performLLMAnalysis(ctx context.Context, anomaly Anomaly, correlations []MetricCorrelation, allMetrics []metrics.Metric) (*LLMAnalysisResult, error) {
+func (rca *RootCauseAnalysisEngine) performLLMAnalysis(ctx context.Context, anomaly models.Anomaly, correlations []MetricCorrelation, allMetrics []metrics.Metric) (*LLMAnalysisResult, error) {
 	if rca.llmClient == nil {
 		return nil, fmt.Errorf("LLM client is not initialized")
 	}
@@ -335,21 +326,21 @@ func (rca *RootCauseAnalysisEngine) performLLMAnalysis(ctx context.Context, anom
 	return result, nil
 }
 
-func (rca *RootCauseAnalysisEngine) generateBasicDescription(anomaly Anomaly, correlations []MetricCorrelation) string {
+func (rca *RootCauseAnalysisEngine) generateBasicDescription(anomaly models.Anomaly, correlations []MetricCorrelation) string {
 	var description string
 
 	switch anomaly.MetricType {
-	case metrics.MetricTypeLatency:
+	case models.MetricTypeLatency:
 		description = fmt.Sprintf("Abnormal increase in %s latency detected. ", anomaly.MetricName)
-	case metrics.MetricTypeTraffic:
+	case models.MetricTypeTraffic:
 		if anomaly.Value > anomaly.Baseline {
 			description = fmt.Sprintf("Unusual spike in %s traffic detected. ", anomaly.MetricName)
 		} else {
 			description = fmt.Sprintf("Unusual drop in %s traffic detected. ", anomaly.MetricName)
 		}
-	case metrics.MetricTypeError:
+	case models.MetricTypeError:
 		description = fmt.Sprintf("Elevated error rate detected in %s. ", anomaly.MetricName)
-	case metrics.MetricTypeSaturation:
+	case models.MetricTypeSaturation:
 		description = fmt.Sprintf("Resource saturation detected in %s. ", anomaly.MetricName)
 	default:
 		description = fmt.Sprintf("Anomaly detected in %s. ", anomaly.MetricName)

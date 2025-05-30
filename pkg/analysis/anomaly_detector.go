@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/fortxun/caza-otel-ai-processor/pkg/metrics"
-	"github.com/fortxun/caza-otel-ai-processor/pkg/processor"
+	"github.com/fortxun/caza-otel-ai-processor/pkg/types/config"
+	"github.com/fortxun/caza-otel-ai-processor/pkg/types/models"
 	"go.uber.org/zap"
 )
 
 type AnomalyDetector struct {
 	logger    *zap.Logger
-	config    *processor.AnomalyDetectionConfig
+	config    *config.AnomalyDetectionConfig
 	baselines map[string]*Baseline
 	mutex     sync.RWMutex
 }
@@ -30,19 +31,7 @@ type Baseline struct {
 	Values []float64
 }
 
-type Anomaly struct {
-	MetricName string `json:"metric_name"`
-	MetricType metrics.MetricType `json:"metric_type"`
-	Timestamp time.Time `json:"timestamp"`
-	Value float64 `json:"value"`
-	Baseline float64 `json:"baseline"`
-	DeviationScore float64 `json:"deviation_score"`
-	Severity string `json:"severity"`
-	Labels map[string]string `json:"labels"`
-	Unit string `json:"unit"`
-}
-
-func NewAnomalyDetector(config *processor.AnomalyDetectionConfig, logger *zap.Logger) *AnomalyDetector {
+func NewAnomalyDetector(config *config.AnomalyDetectionConfig, logger *zap.Logger) *AnomalyDetector {
 	return &AnomalyDetector{
 		logger:    logger,
 		config:    config,
@@ -50,12 +39,12 @@ func NewAnomalyDetector(config *processor.AnomalyDetectionConfig, logger *zap.Lo
 	}
 }
 
-func (ad *AnomalyDetector) DetectAnomalies(ctx context.Context, metrics []metrics.Metric) ([]Anomaly, error) {
+func (ad *AnomalyDetector) DetectAnomalies(ctx context.Context, metrics []metrics.Metric) ([]models.Anomaly, error) {
 	if !ad.config.Enabled {
 		return nil, nil
 	}
 
-	anomalies := make([]Anomaly, 0)
+	anomalies := make([]models.Anomaly, 0)
 
 	for _, metric := range metrics {
 		if math.IsNaN(metric.Value) || math.IsInf(metric.Value, 0) {
@@ -95,9 +84,9 @@ func (ad *AnomalyDetector) DetectAnomalies(ctx context.Context, metrics []metric
 		if math.Abs(deviation) > threshold {
 			severity := ad.calculateSeverity(deviation, threshold)
 
-			anomaly := Anomaly{
+			anomaly := models.Anomaly{
 				MetricName:     metric.Name,
-				MetricType:     metric.Type,
+				MetricType:     models.MetricType(metric.Type),
 				Timestamp:      metric.Timestamp,
 				Value:          metric.Value,
 				Baseline:       baseline.Mean,
@@ -202,9 +191,9 @@ func (ad *AnomalyDetector) getThresholdForMetricType(metricType metrics.MetricTy
 	}
 
 	switch metricType {
-	case metrics.MetricTypeError:
+	case metrics.MetricType(models.MetricTypeError):
 		threshold *= 0.8
-	case metrics.MetricTypeSaturation:
+	case metrics.MetricType(models.MetricTypeSaturation):
 		threshold *= 1.2
 	}
 

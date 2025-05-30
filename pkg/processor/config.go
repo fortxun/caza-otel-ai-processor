@@ -1,5 +1,9 @@
 package processor
 
+import (
+	"github.com/fortxun/caza-otel-ai-processor/pkg/types/config"
+)
+
 // Config defines the configuration for the AI processor.
 type Config struct {
 	// In newer versions, we use component.Config instead of configmodels.ProcessorSettings
@@ -21,13 +25,13 @@ type Config struct {
 	// Output configuration for how AI-generated data is presented
 	Output OutputConfig `mapstructure:"output"`
 	
-	PMM PMMConfig `mapstructure:"pmm"`
+	PMM config.PMMConfig `mapstructure:"pmm"`
 	
-	LLM LLMConfig `mapstructure:"llm"`
+	LLM config.LLMConfig `mapstructure:"llm"`
 	
-	AnomalyDetection AnomalyDetectionConfig `mapstructure:"anomaly_detection"`
+	AnomalyDetection config.AnomalyDetectionConfig `mapstructure:"anomaly_detection"`
 	
-	RootCauseAnalysis RootCauseAnalysisConfig `mapstructure:"root_cause_analysis"`
+	RootCauseAnalysis config.RootCauseAnalysisConfig `mapstructure:"root_cause_analysis"`
 }
 
 // ModelsConfig defines the configuration for the AI models.
@@ -122,87 +126,4 @@ type OutputConfig struct {
 	
 	// MaxAttributeLength defines the maximum length for AI-generated attributes
 	MaxAttributeLength int `mapstructure:"max_attribute_length"`
-}
-
-type PMMConfig struct {
-	Enabled bool `mapstructure:"enabled"`
-	
-	BaseURL string `mapstructure:"base_url"`
-	
-	APIKey string `mapstructure:"api_key"`
-	
-	// Timeout is the timeout for PMM API requests
-	Timeout string `mapstructure:"timeout"`
-	
-	RetryCount int `mapstructure:"retry_count"`
-	
-	MaxRetryTime string `mapstructure:"max_retry_time"`
-	
-	CacheTTL string `mapstructure:"cache_ttl"`
-	
-	CacheSize int `mapstructure:"cache_size"`
-	
-	MetricsQueries map[string]string `mapstructure:"metrics_queries"`
-	
-	QueryInterval string `mapstructure:"query_interval"`
-}
-
-type LLMConfig struct {
-	Enabled bool `mapstructure:"enabled"`
-	
-	Provider string `mapstructure:"provider"`
-	
-	APIKey string `mapstructure:"api_key"`
-	
-	Model string `mapstructure:"model"`
-	
-	MaxTokens int `mapstructure:"max_tokens"`
-	
-	// Temperature controls the randomness of the LLM output (0.0-1.0)
-	Temperature float32 `mapstructure:"temperature"`
-	
-	CacheEnabled bool `mapstructure:"cache_enabled"`
-	
-	CacheTTL string `mapstructure:"cache_ttl"`
-	
-	CacheSize int `mapstructure:"cache_size"`
-	
-	PromptTemplates map[string]string `mapstructure:"prompt_templates"`
-}
-
-// AnomalyDetectionConfig defines the configuration for anomaly detection.
-type AnomalyDetectionConfig struct {
-	Enabled bool `mapstructure:"enabled"`
-	
-	SensitivityLevel string `mapstructure:"sensitivity_level"`
-	
-	BaselineWindowHours int `mapstructure:"baseline_window_hours"`
-	
-	AnomalyThreshold float64 `mapstructure:"anomaly_threshold"`
-	
-	MinDataPoints int `mapstructure:"min_data_points"`
-	
-	SeasonalityPeriod int `mapstructure:"seasonality_period"`
-	
-	AdaptiveBaseline bool `mapstructure:"adaptive_baseline"`
-	
-	// AdaptiveRate controls how quickly the baseline adapts to new data (0.0-1.0)
-	AdaptiveRate float64 `mapstructure:"adaptive_rate"`
-}
-
-// RootCauseAnalysisConfig defines the configuration for root cause analysis.
-type RootCauseAnalysisConfig struct {
-	Enabled bool `mapstructure:"enabled"`
-	
-	CorrelationThreshold float64 `mapstructure:"correlation_threshold"`
-	
-	MaxCausalDepth int `mapstructure:"max_causal_depth"`
-	
-	KnowledgeBaseEnabled bool `mapstructure:"knowledge_base_enabled"`
-	
-	KnowledgeBasePath string `mapstructure:"knowledge_base_path"`
-	
-	UseLLM bool `mapstructure:"use_llm"`
-	
-	MaxRecommendations int `mapstructure:"max_recommendations"`
 }
